@@ -5,6 +5,7 @@ so the whole trading floor still runs out of the box.
 """
 
 import os
+import time
 from dotenv import load_dotenv
 from massive import RESTClient
 from .market_simulator import simulated_price
@@ -12,6 +13,12 @@ from .market_simulator import simulated_price
 load_dotenv(override=True)
 
 massive_api_key = os.getenv("MASSIVE_API_KEY")
+
+# Cache prices briefly so a burst of lookups within one trading run stays inside
+# the free tier's rate limit, and keep the last known price as a fallback so a
+# portfolio never mixes real and simulated prices once Massive has answered.
+CACHE_TTL_SECONDS = 120
+_price_cache: dict[str, tuple[float, float]] = {}
 
 
 def _last_trade(client: RESTClient, symbol: str) -> float:
@@ -34,11 +41,24 @@ plan_tier = 0
 
 
 def get_share_price(symbol: str) -> float:
-    """Return the current price for a symbol, from Massive or the simulator."""
+    """Return the current price for a symbol, from Massive or the simulator.
+
+    Prices are cached for CACHE_TTL_SECONDS. If Massive fails, the last cached
+    price is preferred over the simulator, however stale it is.
+    """
+    symbol = symbol.upper()
+    cached = _price_cache.get(symbol)
+    if cached and time.time() - cached[1] < CACHE_TTL_SECONDS:
+        return cached[0]
     if massive_api_key:
         try:
-            return get_share_price_massive(symbol)
+            price = get_share_price_massive(symbol)
+            _price_cache[symbol] = (price, time.time())
+            return price
         except Exception as e:
+            if cached:
+                print(f"Massive API unavailable ({e}); using the last known price")
+                return cached[0]
             print(f"Massive API unavailable ({e}); using a simulated price")
     return simulated_price(symbol)
 
