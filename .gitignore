@@ -1,0 +1,23 @@
+# Secrets
+.env
+
+# Databases and agent memory
+*.db
+accounts.db
+memory/
+
+# Python
+__pycache__/
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Course notebooks and local tooling
+*.ipynb
+CLAUDE.md
+.claude/
+.ipynb_checkpoints/
