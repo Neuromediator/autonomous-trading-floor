@@ -50,10 +50,12 @@ def risk_manager_mcp_servers() -> list[MCPServerStdio]:
 
 
 def researcher_mcp_servers(name: str) -> list[MCPServerStdio]:
-    """The researcher's MCP servers: Fetch, Tavily web search and Memory.
+    """The researcher's MCP servers: Fetch, Tavily web search and Qdrant memory.
 
     Tavily's server offers several tools; we restrict it to web search so the
     researcher reaches for plain search rather than its heavier crawl or deep-research tools.
+    Memory is a per-trader Qdrant collection run in local mode (no server needed);
+    fastembed downloads its embedding model on first use.
     """
     fetch = MCPServerStdio(
         {"command": "uvx", "args": ["--with", "mcp<2","mcp-server-fetch"]},
@@ -66,9 +68,12 @@ def researcher_mcp_servers(name: str) -> list[MCPServerStdio]:
     )
     memory = MCPServerStdio(
         {
-            "command": "npx",
-            "args": ["-y", "mcp-memory-libsql"],
-            "env": {"LIBSQL_URL": f"file:./memory/{name}.db"},
+            "command": "uvx",
+            "args": ["mcp-server-qdrant"],
+            "env": {
+                "QDRANT_LOCAL_PATH": f"{PROJECT_DIR}/memory/qdrant_{name.lower()}",
+                "COLLECTION_NAME": f"{name.lower()}-memories",
+            },
         },
         client_session_timeout_seconds=TIMEOUT,
     )
