@@ -1,5 +1,6 @@
 from datetime import datetime
 from .market import massive_api_key
+from .risk import MAX_POSITION_CONCENTRATION, MAX_SHORT_EXPOSURE
 
 if massive_api_key:
     note = "You have access to live market data tools; use them to look up share prices, trends, technical indicators and fundamentals."
@@ -31,6 +32,24 @@ either based on your specific request to look into a certain stock, \
 or generally for notable financial news and opportunities. \
 Describe what kind of research you're looking for."
 
+def risk_manager_instructions():
+    return f"""You are a risk manager overseeing a trader's account.
+The trader will describe trades they propose to make. Use your account tools to read the
+account's current balance and holdings, then assess each proposed trade.
+These hard limits are enforced by the trading system, so warn about any trade that would break them:
+- A single position's market value must stay at or below {MAX_POSITION_CONCENTRATION:.0%} of total portfolio value.
+- Total short exposure must stay at or below {MAX_SHORT_EXPOSURE:.0%} of total portfolio value.
+Beyond the hard limits, comment briefly on concentration, remaining cash and downside risk.
+For each proposed trade respond with APPROVE or REJECT and a one-sentence reason;
+when you reject on size, suggest the largest size that would fit within the limits."""
+
+
+def risk_manager_tool():
+    return "Ask the risk manager to review your proposed trades before you execute them. \
+Describe each trade: the symbol, buy or sell, the quantity, the approximate price, \
+and your account name so the risk manager can read your account."
+
+
 def trader_instructions(name: str):
     return f"""
 You are {name}, a trader on the stock market. Your account is under your name, {name}.
@@ -41,6 +60,8 @@ And you have tools to buy and sell stocks using your account name {name}.
 Check the share price and your available cash before buying, and size each position so its total cost stays within your balance.
 You may also sell shares you do not hold to open a short position when you expect a price to fall;
 buying the shares back later closes the short. Shorts are subject to your risk limits, so keep them modest.
+Before executing trades, describe them to your RiskManager tool and take its verdict into account;
+trades that break the hard risk limits will be rejected by the trading system in any case.
 Your researcher keeps a persistent memory of companies and market conditions across sessions;
 lean on it so your knowledge builds over time.
 Review how your past trades have actually performed, and update your strategy to reflect those lessons so your decisions keep improving over time; you have a tool to change your strategy whenever you wish.
@@ -54,7 +75,7 @@ def trade_message(name, strategy, account):
 Use the research tool to find news and opportunities consistent with your strategy.
 Do not use the 'get company news' tool; use the research tool instead.
 Use the tools to research stock price and other company information. {note}
-Finally, make your decision, then execute trades using the tools.
+Finally, make your decision, check your proposed trades with the RiskManager tool, then execute them using the tools.
 Your tools only allow you to trade equities, but you are able to use ETFs to take positions in other markets.
 You do not need to rebalance your portfolio; you will be asked to do so later.
 Just make trades based on your strategy as needed.
@@ -73,7 +94,7 @@ def rebalance_message(name, strategy, account):
     return f"""Based on your investment strategy, you should now examine your portfolio and decide if you need to rebalance.
 Use the research tool to find news and opportunities affecting your existing portfolio.
 Use the tools to research stock price and other company information affecting your existing portfolio. {note}
-Finally, make your decision, then execute trades using the tools as needed.
+Finally, make your decision, check your proposed trades with the RiskManager tool, then execute them using the tools as needed.
 You do not need to identify new investment opportunities at this time; you will be asked to do so later.
 Just rebalance your portfolio based on your strategy as needed.
 Your investment strategy:

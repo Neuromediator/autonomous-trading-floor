@@ -33,6 +33,22 @@ def trader_mcp_servers() -> list[MCPServerStdio]:
     return [MCPServerStdio(p, client_session_timeout_seconds=TIMEOUT) for p in params]
 
 
+def risk_manager_mcp_servers() -> list[MCPServerStdio]:
+    """A read-only view of the Accounts server for the risk manager.
+
+    The risk manager must be able to inspect balances and holdings but never
+    trade or change strategies, so the server is filtered to its read tools.
+    """
+    params = {"command": "uv", "args": ["run", "-m", "backend.accounts_server"], "cwd": PROJECT_DIR}
+    return [
+        MCPServerStdio(
+            params,
+            client_session_timeout_seconds=TIMEOUT,
+            tool_filter=create_static_tool_filter(allowed_tool_names=["get_balance", "get_holdings"]),
+        )
+    ]
+
+
 def researcher_mcp_servers(name: str) -> list[MCPServerStdio]:
     """The researcher's MCP servers: Fetch, Tavily web search and Memory.
 

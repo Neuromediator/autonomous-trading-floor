@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 from .market import get_share_price
 from .database import write_account, read_account, write_log
+from .risk import check_trade
 
 load_dotenv(override=True)
 
@@ -86,7 +87,8 @@ class Account(BaseModel):
             raise ValueError("Insufficient funds to buy shares.")
         elif price==0:
             raise ValueError(f"Unrecognized symbol {symbol}")
-        
+        check_trade(self, symbol, quantity, buy_price)
+
         # Update holdings
         self.holdings[symbol] = self.holdings.get(symbol, 0) + quantity
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -107,6 +109,7 @@ class Account(BaseModel):
             raise ValueError(f"Unrecognized symbol {symbol}")
         sell_price = price * (1 - SPREAD)
         total_proceeds = sell_price * quantity
+        check_trade(self, symbol, -quantity, sell_price)
 
         # Update holdings; the position may go negative (a short)
         self.holdings[symbol] = self.holdings.get(symbol, 0) - quantity

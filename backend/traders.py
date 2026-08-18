@@ -8,12 +8,14 @@ import os
 import json
 from .templates import (
     researcher_instructions,
+    risk_manager_instructions,
+    risk_manager_tool,
     trader_instructions,
     trade_message,
     rebalance_message,
     research_tool,
 )
-from .mcp_servers import trader_mcp_servers, researcher_mcp_servers
+from .mcp_servers import trader_mcp_servers, researcher_mcp_servers, risk_manager_mcp_servers
 
 load_dotenv(override=True)
 
@@ -63,6 +65,16 @@ async def get_researcher_tool(mcp_servers, model_name) -> Tool:
     return researcher.as_tool(tool_name="Researcher", tool_description=research_tool())
 
 
+async def get_risk_manager_tool(mcp_servers, model_name) -> Tool:
+    risk_manager = Agent(
+        name="RiskManager",
+        instructions=risk_manager_instructions(),
+        model=get_model(model_name),
+        mcp_servers=mcp_servers,
+    )
+    return risk_manager.as_tool(tool_name="RiskManager", tool_description=risk_manager_tool())
+
+
 class Trader:
     def __init__(self, name: str, lastname="Trader", model_name="gpt-5.4-mini"):
         self.name = name
@@ -71,13 +83,14 @@ class Trader:
         self.model_name = model_name
         self.do_trade = True
 
-    async def create_agent(self, trader_mcp_servers, researcher_mcp_servers) -> Agent:
-        tool = await get_researcher_tool(researcher_mcp_servers, self.model_name)
+    async def create_agent(self, trader_mcp_servers, researcher_mcp_servers, risk_mcp_servers) -> Agent:
+        researcher = await get_researcher_tool(researcher_mcp_servers, self.model_name)
+        risk_manager = await get_risk_manager_tool(risk_mcp_servers, self.model_name)
         self.agent = Agent(
             name=self.name,
             instructions=trader_instructions(self.name),
             model=get_model(self.model_name),
-            tools=[tool],
+            tools=[researcher, risk_manager],
             mcp_servers=trader_mcp_servers,
         )
         return self.agent
@@ -88,8 +101,8 @@ class Trader:
         account_json.pop("portfolio_value_time_series", None)
         return json.dumps(account_json)
 
-    async def run_agent(self, trader_mcp_servers, researcher_mcp_servers):
-        self.agent = await self.create_agent(trader_mcp_servers, researcher_mcp_servers)
+    async def run_agent(self, trader_mcp_servers, researcher_mcp_servers, risk_mcp_servers):
+        self.agent = await self.create_agent(trader_mcp_servers, researcher_mcp_servers, risk_mcp_servers)
         account = await self.get_account_report()
         strategy = await read_strategy_resource(self.name)
         message = (
@@ -108,7 +121,10 @@ class Trader:
                 await stack.enter_async_context(server)
                 for server in researcher_mcp_servers(self.name)
             ]
-            await self.run_agent(trader_servers, researcher_servers)
+            risk_servers = [
+                await stack.enter_async_context(server) for server in risk_manager_mcp_servers()
+            ]
+            await self.run_agent(trader_servers, researcher_servers, risk_servers)
 
     async def run_with_trace(self):
         trace_name = f"{self.name}-trading" if self.do_trade else f"{self.name}-rebalancing"
