@@ -36,11 +36,15 @@ roster_by_name = {trader["name"].lower(): trader for trader in roster}
 app = FastAPI(title="Trading Floor")
 
 
-def average_cost(account: Account, symbol: str) -> float:
-    """Average price paid across this symbol's buys, for per-holding profit."""
-    spend = sum(t.price * t.quantity for t in account.transactions if t.symbol == symbol and t.quantity > 0)
-    bought = sum(t.quantity for t in account.transactions if t.symbol == symbol and t.quantity > 0)
-    return spend / bought if bought else 0.0
+def average_cost(account: Account, symbol: str, quantity: int) -> float:
+    """Average open price for this symbol's side: buys for a long, sells for a short."""
+    is_long = quantity > 0
+    same_side = [
+        t for t in account.transactions if t.symbol == symbol and (t.quantity > 0) == is_long
+    ]
+    spend = sum(t.price * abs(t.quantity) for t in same_side)
+    shares = sum(abs(t.quantity) for t in same_side)
+    return spend / shares if shares else 0.0
 
 
 def holdings_detail(account: Account) -> list[dict]:
@@ -48,7 +52,7 @@ def holdings_detail(account: Account) -> list[dict]:
     details = []
     for symbol, quantity in account.holdings.items():
         price = market.get_share_price(symbol)
-        cost = average_cost(account, symbol)
+        cost = average_cost(account, symbol, quantity)
         details.append(
             {
                 "symbol": symbol,

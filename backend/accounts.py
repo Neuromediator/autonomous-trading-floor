@@ -101,16 +101,15 @@ class Account(BaseModel):
         return "Completed. Latest details:\n" + self.report()
 
     def sell_shares(self, symbol: str, quantity: int, rationale: str) -> str:
-        """ Sell shares of a stock if the user has enough shares. """
-        if self.holdings.get(symbol, 0) < quantity:
-            raise ValueError(f"Cannot sell {quantity} shares of {symbol}. Not enough shares held.")
-        
+        """ Sell shares of a stock; selling beyond current holdings opens or extends a short position. """
         price = get_share_price(symbol)
+        if price == 0:
+            raise ValueError(f"Unrecognized symbol {symbol}")
         sell_price = price * (1 - SPREAD)
         total_proceeds = sell_price * quantity
-        
-        # Update holdings
-        self.holdings[symbol] -= quantity
+
+        # Update holdings; the position may go negative (a short)
+        self.holdings[symbol] = self.holdings.get(symbol, 0) - quantity
         
         # If shares are completely sold, remove from holdings
         if self.holdings[symbol] == 0:

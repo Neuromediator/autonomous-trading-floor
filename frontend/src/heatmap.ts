@@ -30,10 +30,11 @@ export class Heatmap {
     }
     delete this.host.dataset.empty;
 
-    const totalValue = holdings.reduce((s, h) => s + h.market_value, 0);
+    // Short positions carry a negative market value; size tiles by exposure.
+    const totalValue = holdings.reduce((s, h) => s + Math.abs(h.market_value), 0);
 
     for (const h of holdings) {
-      const share = totalValue > 0 ? h.market_value / totalValue : 1 / holdings.length;
+      const share = totalValue > 0 ? Math.abs(h.market_value) / totalValue : 1 / holdings.length;
       let tile = this.tiles.get(h.symbol);
       if (!tile) {
         tile = this.createTile(h.symbol);
@@ -42,7 +43,8 @@ export class Heatmap {
       }
       tile.style.flexGrow = String(Math.max(0.05, share));
       tile.dataset.pnl = h.unrealized_pnl >= 0 ? "up" : "down";
-      tile.querySelector(".heatmap-value")!.textContent = formatMoney(h.market_value);
+      tile.querySelector(".heatmap-ticker")!.textContent = h.quantity < 0 ? `${h.symbol} (short)` : h.symbol;
+      tile.querySelector(".heatmap-value")!.textContent = formatMoney(Math.abs(h.market_value));
 
       const dir = priceDirections[h.symbol];
       if (dir === "up" || dir === "down") flash(tile, dir);
