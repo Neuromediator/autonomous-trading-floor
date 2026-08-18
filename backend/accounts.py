@@ -89,8 +89,10 @@ class Account(BaseModel):
             raise ValueError(f"Unrecognized symbol {symbol}")
         check_trade(self, symbol, quantity, buy_price)
 
-        # Update holdings
+        # Update holdings; buying while short covers the position
         self.holdings[symbol] = self.holdings.get(symbol, 0) + quantity
+        if self.holdings[symbol] == 0:
+            del self.holdings[symbol]
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # Record transaction
         transaction = Transaction(symbol=symbol, quantity=quantity, price=buy_price, timestamp=timestamp, rationale=rationale)
