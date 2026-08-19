@@ -76,7 +76,7 @@ async def get_risk_manager_tool(mcp_servers, model_name) -> Tool:
 
 
 class Trader:
-    def __init__(self, name: str, lastname="Trader", model_name="gpt-5.4-mini"):
+    def __init__(self, name: str, lastname="Trader", model_name="gpt-5.6-luna"):
         self.name = name
         self.lastname = lastname
         self.agent = None

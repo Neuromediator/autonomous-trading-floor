@@ -10,13 +10,13 @@ An equity trading simulation where four autonomous LLM agents manage virtual por
 
 ## How it works
 
-Four traders — Warren (value), George (contrarian macro, shorts included), Ray (systematic), Cathie (crypto ETFs) — run on a timer. Each trader is an agent with its own MCP servers and two sub-agents wrapped as tools:
+Four traders — Warren (value), George (contrarian macro, shorts included), Ray (systematic), Cathie (crypto ETFs) — run on a timer, one after another so they don't burst through rate limits. Each runs on a different model (GPT‑5.6 Sol, Grok 4.5, Gemini 3.7 Flash, DeepSeek V4 Flash — picked from the [Artificial Analysis](https://artificialanalysis.ai/) leaderboard for cost/quality on agentic tool use), and each is an agent with its own MCP servers and two sub-agents wrapped as tools:
 
 ```
 Trader agent
 ├── MCP: accounts   (buy, sell, balance, holdings, change_strategy)
 ├── MCP: push       (notifications)
-├── MCP: market     (live prices via Massive, or a built-in simulator)
+├── MCP: market     (live prices via Massive)
 ├── Tool: Researcher agent
 │   ├── MCP: fetch          (read web pages)
 │   ├── MCP: tavily         (web search, filtered to plain search)
@@ -34,7 +34,7 @@ Key mechanics:
 
 ## Running it
 
-Requires Python 3.12+ with [uv](https://docs.astral.sh/uv/), and Node for the frontend. Copy `.env.example` to `.env` and fill in your keys (only `OPENAI_API_KEY` and `TAVILY_API_KEY` are needed to start; without a Massive key, prices come from a deterministic simulator).
+Requires Python 3.12+ with [uv](https://docs.astral.sh/uv/), and Node for the frontend. Copy `.env.example` to `.env` and fill in your keys — `MASSIVE_API_KEY` (the free tier is enough), `TAVILY_API_KEY`, and the LLM keys for the models you enable (see the comments in `.env.example`). Push notifications are off by default; set `PUSH_NOTIFICATIONS=true` with Pushover keys to receive them.
 
 ```bash
 uv sync
@@ -54,7 +54,7 @@ cd frontend && npm run dev
 uv run -m backend.trading_floor
 ```
 
-Interactive API docs at http://localhost:8000/docs. The engine runs every `RUN_EVERY_N_MINUTES` during market hours — keep an eye on your LLM API usage.
+Interactive API docs at http://localhost:8000/docs. The engine runs a round every `RUN_EVERY_N_MINUTES` during market hours (set `1440` for once a day), with `SECONDS_BETWEEN_TRADERS` between traders inside a round — keep an eye on your LLM API usage.
 
 Reset all traders to their starting strategies with `uv run -m backend.reset`.
 
@@ -71,8 +71,8 @@ Covers the account mechanics (including shorts), the risk limits, and the price 
 - The backend exposes a small read-only JSON API (`/api/traders`, `/api/traders/{name}`, `/api/traders/{name}/logs`, `/api/market`); the engine writes the SQLite database out of band. The Vite dev server proxies `/api`, so there is no CORS to configure.
 - Sub-agents are wrapped as tools (`agent.as_tool(...)`) rather than handoffs: the trader stays in control and gets an answer back.
 - Tool exposure is deliberately narrow — Tavily is filtered to plain search, and the RiskManager sees only the read-only account tools. Choosing what an agent can see is context engineering.
-- Prices are cached briefly, and a stale cached price is preferred over the simulator when the market API is unavailable, so a portfolio never silently mixes real and synthetic prices.
-- With `USE_MANY_MODELS=true`, each trader runs on a different provider (OpenAI, DeepSeek, Gemini, Grok) through OpenAI-compatible endpoints.
+- Prices live in a SQLite cache shared by every process (the engine, each trader's accounts server, the API). A fresh hit skips the API call, a stale price beats a failing API, and a symbol with no price history raises — a trade fails loudly and is retried later rather than filling at a made-up price. There is no simulated fallback by design.
+- Each trader runs on a different provider (OpenAI, xAI, Google, DeepSeek) through OpenAI-compatible endpoints; Grok and DeepSeek are routed via OpenRouter. Set `USE_MANY_MODELS=false` to run everyone on one cheap model.
 
 ## Credits
 
