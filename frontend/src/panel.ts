@@ -49,6 +49,8 @@ export class TraderPanel {
     this.valueEl = this.root.querySelector(".panel-value")!;
     this.pnlEl = this.root.querySelector(".panel-pnl")!;
     this.strategyEl = this.root.querySelector(".panel-strategy")!;
+    // The two-line clamp hides most of the strategy; a click unfolds it.
+    this.strategyEl.addEventListener("click", () => this.strategyEl.classList.toggle("expanded"));
     this.heatmap = new Heatmap(this.root.querySelector(".panel-heatmap")!);
     this.log = new LogView(this.root.querySelector(".panel-log")!);
     this.transactions = new TransactionsView(this.root.querySelector(".panel-transactions")!);

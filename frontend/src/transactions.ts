@@ -1,4 +1,7 @@
-// A trader's recent trades, newest first. Mirrors the activity log's compact style.
+// A trader's recent trades, newest first. Mirrors the activity log's compact
+// style. Each trade carries the agent's rationale: hover shows it as a tooltip,
+// clicking the row unfolds it inline. Expanded rows are remembered by key
+// because the list re-renders on every poll.
 
 import type { Transaction } from "./api";
 
@@ -6,6 +9,7 @@ const MAX_ROWS = 12;
 
 export class TransactionsView {
   private host: HTMLElement;
+  private expanded = new Set<string>();
 
   constructor(host: HTMLElement) {
     this.host = host;
@@ -22,6 +26,17 @@ export class TransactionsView {
       return;
     }
     for (const t of transactions.slice(-MAX_ROWS).reverse()) {
+      const key = `${t.timestamp}|${t.symbol}|${t.quantity}`;
+      const item = document.createElement("div");
+      item.className = "txn-item";
+      item.classList.toggle("expanded", this.expanded.has(key));
+      item.title = t.rationale;
+      item.addEventListener("click", () => {
+        if (this.expanded.has(key)) this.expanded.delete(key);
+        else this.expanded.add(key);
+        item.classList.toggle("expanded");
+      });
+
       const row = document.createElement("div");
       row.className = "txn-row";
 
@@ -38,8 +53,13 @@ export class TransactionsView {
       detail.className = "txn-detail";
       detail.textContent = `${Math.abs(t.quantity)} ${t.symbol} @ $${t.price.toFixed(2)}`;
 
+      const rationale = document.createElement("div");
+      rationale.className = "txn-rationale";
+      rationale.textContent = t.rationale;
+
       row.append(date, side, detail);
-      this.host.append(row);
+      item.append(row, rationale);
+      this.host.append(item);
     }
   }
 }

@@ -279,7 +279,11 @@ body {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  cursor: default;
+  cursor: pointer;
+}
+.panel-strategy.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
 }
 .panel-strategy.empty {
   color: var(--fg-dim);
@@ -380,6 +384,13 @@ body {
   padding: 1px 0;
   align-items: baseline;
   white-space: nowrap;
+  cursor: pointer;
+}
+.log-row.expanded .log-text {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
 }
 .log-time {
   flex: none;
@@ -435,6 +446,21 @@ body {
 .txn-empty {
   color: var(--fg-dim);
   font-style: italic;
+}
+.txn-item {
+  cursor: pointer;
+}
+.txn-rationale {
+  display: none;
+  padding: 2px 0 5px;
+  color: var(--fg-muted);
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.45;
+  border-bottom: 1px solid var(--border);
+}
+.txn-item.expanded .txn-rationale {
+  display: block;
 }
 .txn-row {
   display: flex;

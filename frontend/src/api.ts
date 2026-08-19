@@ -48,7 +48,7 @@ export interface LogRow {
 }
 
 export interface MarketInfo {
-  source: "massive" | "simulator";
+  source: "massive" | "offline";
   is_market_open: boolean;
 }
 
