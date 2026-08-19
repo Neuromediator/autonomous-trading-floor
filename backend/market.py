@@ -1,24 +1,24 @@
-"""Share prices from the Massive market data API, or a simulator when no key is set.
+"""Share prices from the Massive market data API, with a shared SQLite cache.
 
-Set MASSIVE_API_KEY to use live data. Without it, prices come from market_simulator
-so the whole trading floor still runs out of the box.
+MASSIVE_API_KEY is required: there is no simulated fallback, so a portfolio can
+never mix real and synthetic prices. Prices are cached in the accounts database,
+shared by every process (the engine, each trader's accounts server, the API).
+A fresh cache hit is served without an API call; when Massive is unavailable
+the last known price is used however old it is; a symbol never priced before
+raises, so a trade fails loudly instead of executing at a made-up price.
 """
 
 import os
 import time
 from dotenv import load_dotenv
 from massive import RESTClient
-from .market_simulator import simulated_price
+from .database import read_price, write_price
 
 load_dotenv(override=True)
 
 massive_api_key = os.getenv("MASSIVE_API_KEY")
 
-# Cache prices briefly so a burst of lookups within one trading run stays inside
-# the free tier's rate limit, and keep the last known price as a fallback so a
-# portfolio never mixes real and simulated prices once Massive has answered.
 CACHE_TTL_SECONDS = 120
-_price_cache: dict[str, tuple[float, float]] = {}
 
 
 def _last_trade(client: RESTClient, symbol: str) -> float:
@@ -41,26 +41,30 @@ plan_tier = 0
 
 
 def get_share_price(symbol: str) -> float:
-    """Return the current price for a symbol, from Massive or the simulator.
+    """Return the current price for a symbol.
 
-    Prices are cached for CACHE_TTL_SECONDS. If Massive fails, the last cached
-    price is preferred over the simulator, however stale it is.
+    Served from the shared cache when fresh; otherwise fetched from Massive and
+    cached. If Massive fails, the last known price wins over failing the caller;
+    only a symbol with no price history at all raises.
     """
+    if not massive_api_key:
+        raise RuntimeError("MASSIVE_API_KEY is not set; live market data is required")
     symbol = symbol.upper()
-    cached = _price_cache.get(symbol)
+    cached = read_price(symbol)
     if cached and time.time() - cached[1] < CACHE_TTL_SECONDS:
         return cached[0]
-    if massive_api_key:
-        try:
-            price = get_share_price_massive(symbol)
-            _price_cache[symbol] = (price, time.time())
-            return price
-        except Exception as e:
-            if cached:
-                print(f"Massive API unavailable ({e}); using the last known price")
-                return cached[0]
-            print(f"Massive API unavailable ({e}); using a simulated price")
-    return simulated_price(symbol)
+    try:
+        price = get_share_price_massive(symbol)
+        write_price(symbol, price, time.time())
+        return price
+    except Exception as e:
+        if cached:
+            print(f"Massive API unavailable ({e}); using the last known price for {symbol}")
+            return cached[0]
+        raise RuntimeError(
+            f"No price available for {symbol}: the market data API is unavailable "
+            f"and no earlier price is cached. Try again shortly. ({e})"
+        ) from None
 
 
 def get_share_price_massive(symbol: str) -> float:
@@ -78,7 +82,7 @@ def get_share_price_massive(symbol: str) -> float:
 
 
 def is_market_open() -> bool:
-    """Whether the US market is open; True on simulated data or if Massive is unreachable."""
+    """Whether the US market is open; True if Massive is unreachable."""
     if not massive_api_key:
         return True
     try:

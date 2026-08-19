@@ -125,7 +125,7 @@ body {
   border-radius: 50%;
   background: var(--fg-muted);
 }
-.market-badge[data-source="simulator"] .market-dot { background: var(--blue); }
+.market-badge[data-source="offline"] .market-dot { background: var(--trend-down); }
 .market-badge[data-source="massive"] .market-dot { background: var(--trend-up); }
 
 .market-status {

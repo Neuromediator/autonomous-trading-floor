@@ -20,6 +20,15 @@ with sqlite3.connect(DB) as conn:
             message TEXT
         )
     ''')
+    # Shared price cache: every process (engine, each trader's accounts server,
+    # the API) sees the same last known price for a symbol.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS prices (
+            symbol TEXT PRIMARY KEY,
+            price REAL,
+            fetched_at REAL
+        )
+    ''')
     conn.commit()
 
 def write_account(name, account_dict):
@@ -40,6 +49,25 @@ def read_account(name):
         row = cursor.fetchone()
         return json.loads(row[0]) if row else None
     
+def write_price(symbol: str, price: float, fetched_at: float):
+    """Store the latest known price for a symbol, with its unix fetch time."""
+    with sqlite3.connect(DB) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO prices (symbol, price, fetched_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(symbol) DO UPDATE SET price=excluded.price, fetched_at=excluded.fetched_at
+        ''', (symbol.upper(), price, fetched_at))
+        conn.commit()
+
+def read_price(symbol: str):
+    """Return (price, fetched_at) for a symbol, or None if never seen."""
+    with sqlite3.connect(DB) as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT price, fetched_at FROM prices WHERE symbol = ?', (symbol.upper(),))
+        row = cursor.fetchone()
+        return (row[0], row[1]) if row else None
+
 def write_log(name: str, type: str, message: str):
     """
     Write a log entry to the logs table.

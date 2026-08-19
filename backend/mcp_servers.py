@@ -10,21 +10,19 @@ PROJECT_DIR = str(Path(__file__).resolve().parent.parent)
 tavily_env = {"TAVILY_API_KEY": os.getenv("TAVILY_API_KEY")}
 TIMEOUT = 120
 
-# The market data server for the trader.
-# With a key, hand the agent Massive's own market data server, run locally over stdio.
-# Without one, use our market server, which serves simulated prices.
-if massive_api_key:
-    market_params = {
-        "command": "uvx",
-        "args": ["--with", "mcp<2", "--from", "git+https://github.com/massive-com/mcp_massive@v0.10.0", "mcp_massive"],
-        "env": {"MASSIVE_API_KEY": massive_api_key},
-    }
-else:
-    market_params = {"command": "uv", "args": ["run", "-m", "backend.market_server"], "cwd": PROJECT_DIR}
+# The market data server for the trader: Massive's own server, run locally over
+# stdio. A key is required — there is no simulated fallback.
+market_params = {
+    "command": "uvx",
+    "args": ["--with", "mcp<2", "--from", "git+https://github.com/massive-com/mcp_massive@v0.10.0", "mcp_massive"],
+    "env": {"MASSIVE_API_KEY": massive_api_key},
+}
 
 
 def trader_mcp_servers() -> list[MCPServerStdio]:
     """The trader's MCP servers: our Accounts server, Push Notification and Market data."""
+    if not massive_api_key:
+        raise RuntimeError("MASSIVE_API_KEY is not set; live market data is required to trade")
     params = [
         {"command": "uv", "args": ["run", "-m", "backend.accounts_server"], "cwd": PROJECT_DIR},
         {"command": "uv", "args": ["run", "-m", "backend.push_server"], "cwd": PROJECT_DIR},

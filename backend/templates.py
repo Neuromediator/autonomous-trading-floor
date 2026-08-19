@@ -1,11 +1,7 @@
 from datetime import datetime
-from .market import massive_api_key
 from .risk import MAX_POSITION_CONCENTRATION, MAX_SHORT_EXPOSURE
 
-if massive_api_key:
-    note = "You have access to live market data tools; use them to look up share prices, trends, technical indicators and fundamentals."
-else:
-    note = "You have access to a market data tool; use your lookup_share_price tool to get the current share price for any symbol."
+note = "You have access to live market data tools; use them to look up share prices, trends, technical indicators and fundamentals."
 
 
 def researcher_instructions():
