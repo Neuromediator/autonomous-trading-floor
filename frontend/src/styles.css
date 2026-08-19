@@ -50,16 +50,18 @@ html, body {
 body {
   display: grid;
   grid-template-columns: 220px 1fr;
-  /* Lock the body to the viewport so each panel row (1fr) has a concrete size for
-     uPlot's canvas to fill. Without this, 1fr falls back to content height and the
-     chart collapses to its minimum. */
-  height: 100vh;
-  overflow: hidden;
+  /* Panels size themselves (the chart and log rows have fixed heights, so uPlot
+     gets concrete dimensions) and the page scrolls when they don't fit. */
+  min-height: 100vh;
 }
 
 /* ---- Sidebar ---- */
 
 .sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -199,18 +201,17 @@ body {
 
 .panels {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
   gap: 12px;
   padding: 12px;
-  min-height: 0;
 }
 
 .panel {
   display: grid;
-  /* Reserve space for the activity log; without minmax the 1fr bottom row can
-     collapse to 0 when the chart's min-height and header fill the panel. */
-  grid-template-rows: auto minmax(72px, 2fr) auto minmax(96px, 1fr);
+  /* Fixed heights for the chart and bottom rows give every panel the same
+     footprint and uPlot a concrete canvas size; the page scrolls as needed. */
+  grid-template-rows: auto 190px auto auto;
   gap: 10px;
   padding: 16px;
   background: var(--bg-raised);
@@ -357,7 +358,7 @@ body {
 /* ---- Log ---- */
 
 .log {
-  height: 100%;
+  height: 180px;
   overflow-y: auto;
   background: var(--bg-sunk);
   border: 1px solid var(--border);
@@ -421,7 +422,7 @@ body {
 }
 
 .txns {
-  height: 100%;
+  height: 180px;
   overflow-y: auto;
   background: var(--bg-sunk);
   border: 1px solid var(--border);
@@ -460,4 +461,57 @@ body {
   color: var(--fg-muted);
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ---- Responsive layout ---- */
+
+/* Narrow desktop / tablet: one panel per row. */
+@media (max-width: 1180px) {
+  .panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Phone / small tablet: sidebar becomes a top bar above the panels. */
+@media (max-width: 820px) {
+  body {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 28px;
+    padding: 14px 16px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .market {
+    border: none;
+    padding: 0;
+  }
+  .returns-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+  }
+  .returns-row {
+    gap: 6px;
+  }
+  .panel-value {
+    font-size: 28px;
+  }
+}
+
+/* Small phones: stack the activity log above the trades. */
+@media (max-width: 560px) {
+  .panel-bottom {
+    grid-template-columns: 1fr;
+  }
+  .log,
+  .txns {
+    height: 150px;
+  }
 }
