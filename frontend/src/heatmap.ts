@@ -1,13 +1,20 @@
 // Holdings heatmap: one tile per symbol, size proportional to market value,
 // colour by unrealised profit. Tiles flash green or red when the price ticks.
 // A neutral cash tile completes the picture, so tile sizes read as shares of
-// the whole portfolio, not just of the invested part.
+// the whole portfolio, not just of the invested part. Positions are ranked by
+// exposure and the tail is merged into one tile, because a panel only fits so
+// many tiles before the sizes stop meaning anything.
 
 import type { Holding } from "./api";
 
 const FLASH_MS = 600;
-// Its own namespace, so a real ticker named CASH could never collide.
+// Their own namespace, so a real ticker named CASH could never collide.
 const CASH_KEY = "·cash·";
+const REST_KEY = "·rest·";
+// A panel fits about ten tiles on one row before the ticker stops being
+// readable and tile sizes all collapse to the minimum. Beyond that the
+// smallest positions are merged into a single tile.
+const MAX_HOLDING_TILES = 8;
 
 export class Heatmap {
   private host: HTMLElement;
@@ -23,51 +30,95 @@ export class Heatmap {
     priceDirections: Record<string, "up" | "down" | "same">,
     cash = 0,
   ): void {
-    const symbols = new Set(holdings.map((h) => h.symbol));
-    if (holdings.length > 0) symbols.add(CASH_KEY);
-
-    for (const [symbol, el] of this.tiles) {
-      if (!symbols.has(symbol)) {
-        el.remove();
-        this.tiles.delete(symbol);
-      }
-    }
-
     if (holdings.length === 0) {
+      for (const [key, el] of this.tiles) {
+        el.remove();
+        this.tiles.delete(key);
+      }
       this.host.dataset.empty = "true";
       return;
     }
     delete this.host.dataset.empty;
 
+    // Biggest exposure first, so the panel reads top-down by conviction.
+    const ranked = [...holdings].sort(
+      (a, b) => Math.abs(b.market_value) - Math.abs(a.market_value),
+    );
+    const shown = ranked.slice(0, MAX_HOLDING_TILES);
+    const merged = ranked.slice(MAX_HOLDING_TILES);
+
+    const live = new Set(shown.map((h) => h.symbol));
+    live.add(CASH_KEY);
+    if (merged.length > 0) live.add(REST_KEY);
+    for (const [key, el] of this.tiles) {
+      if (!live.has(key)) {
+        el.remove();
+        this.tiles.delete(key);
+      }
+    }
+
     // Short positions carry a negative market value; size tiles by exposure.
     const totalValue = holdings.reduce((s, h) => s + Math.abs(h.market_value), 0) + cash;
+    const shareOf = (value: number) => Math.max(0.05, totalValue > 0 ? value / totalValue : 0);
+    const order: string[] = [];
 
-    for (const h of holdings) {
-      const share = totalValue > 0 ? Math.abs(h.market_value) / totalValue : 1 / holdings.length;
-      let tile = this.tiles.get(h.symbol);
-      if (!tile) {
-        tile = this.createTile(h.symbol);
-        this.host.append(tile);
-        this.tiles.set(h.symbol, tile);
-      }
-      tile.style.flexGrow = String(Math.max(0.05, share));
+    for (const h of shown) {
+      const tile = this.tile(h.symbol);
+      order.push(h.symbol);
+      tile.style.flexGrow = String(shareOf(Math.abs(h.market_value)));
       tile.dataset.pnl = h.unrealized_pnl >= 0 ? "up" : "down";
       tile.querySelector(".heatmap-ticker")!.textContent = h.quantity < 0 ? `${h.symbol} (short)` : h.symbol;
       tile.querySelector(".heatmap-value")!.textContent = formatMoney(Math.abs(h.market_value));
+      tile.title =
+        `${h.symbol}: ${h.quantity} shares at $${h.price.toFixed(2)} ` +
+        `(avg cost $${h.avg_cost.toFixed(2)}), ` +
+        `unrealised ${h.unrealized_pnl >= 0 ? "+" : "-"}$${Math.abs(h.unrealized_pnl).toFixed(2)}`;
 
       const dir = priceDirections[h.symbol];
       if (dir === "up" || dir === "down") flash(tile, dir);
     }
 
-    let cashTile = this.tiles.get(CASH_KEY);
-    if (!cashTile) {
-      cashTile = this.createTile("Cash");
-      cashTile.dataset.pnl = "cash";
-      this.host.append(cashTile);
-      this.tiles.set(CASH_KEY, cashTile);
+    if (merged.length > 0) {
+      const value = merged.reduce((s, h) => s + Math.abs(h.market_value), 0);
+      const tile = this.tile(REST_KEY, `+${merged.length} more`);
+      order.push(REST_KEY);
+      tile.dataset.pnl = "rest";
+      tile.style.flexGrow = String(shareOf(value));
+      tile.querySelector(".heatmap-ticker")!.textContent = `+${merged.length} more`;
+      tile.querySelector(".heatmap-value")!.textContent = formatMoney(value);
+      tile.title = merged
+        .map((h) => `${h.symbol}: ${h.quantity} @ $${h.price.toFixed(2)}`)
+        .join("\n");
     }
-    cashTile.style.flexGrow = String(Math.max(0.05, totalValue > 0 ? cash / totalValue : 0));
+
+    const cashTile = this.tile(CASH_KEY, "Cash");
+    order.push(CASH_KEY);
+    cashTile.dataset.pnl = "cash";
+    cashTile.style.flexGrow = String(shareOf(cash));
     cashTile.querySelector(".heatmap-value")!.textContent = formatMoney(cash);
+    cashTile.title = `Uninvested cash: $${cash.toFixed(2)}`;
+
+    this.reorder(order);
+  }
+
+  /** The tile for a key, created on first use. */
+  private tile(key: string, label = key): HTMLElement {
+    let tile = this.tiles.get(key);
+    if (!tile) {
+      tile = this.createTile(label);
+      this.host.append(tile);
+      this.tiles.set(key, tile);
+    }
+    return tile;
+  }
+
+  /** Match DOM order to ranking, but only when it actually changed: re-appending
+   *  a tile restarts its flash animation. */
+  private reorder(order: string[]): void {
+    const current = [...this.host.children];
+    const wanted = order.map((key) => this.tiles.get(key)!);
+    if (current.length === wanted.length && current.every((el, i) => el === wanted[i])) return;
+    this.host.append(...wanted);
   }
 
   private createTile(symbol: string): HTMLElement {

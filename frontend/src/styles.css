@@ -336,7 +336,8 @@ body {
 .heatmap-tile[data-pnl="down"] {
   background: color-mix(in srgb, var(--trend-down) 20%, var(--bg-sunk));
 }
-.heatmap-tile[data-pnl="cash"] {
+.heatmap-tile[data-pnl="cash"],
+.heatmap-tile[data-pnl="rest"] {
   background: color-mix(in srgb, var(--fg-dim) 14%, var(--bg-sunk));
   color: var(--fg-dim);
 }
@@ -349,6 +350,14 @@ body {
 .heatmap-value {
   font-size: 11px;
   color: var(--fg-muted);
+}
+/* Narrow tiles must clip their label rather than spill over the neighbour;
+   the full detail is in the tile's tooltip. */
+.heatmap-ticker,
+.heatmap-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .heatmap-tile.flash-up { animation: flash-up 600ms ease-out; }
