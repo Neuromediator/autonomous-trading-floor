@@ -7,7 +7,6 @@ from .market import massive_api_key
 load_dotenv(override=True)
 
 PROJECT_DIR = str(Path(__file__).resolve().parent.parent)
-tavily_env = {"TAVILY_API_KEY": os.getenv("TAVILY_API_KEY")}
 TIMEOUT = 120
 
 def trader_mcp_servers() -> list[MCPServerStdio]:
@@ -46,10 +45,12 @@ def risk_manager_mcp_servers() -> list[MCPServerStdio]:
 
 
 def researcher_mcp_servers(name: str) -> list[MCPServerStdio]:
-    """The researcher's MCP servers: Fetch, Tavily web search and Qdrant memory.
+    """The researcher's MCP servers: Fetch, web search and Qdrant memory.
 
-    Tavily's server offers several tools; we restrict it to web search so the
-    researcher reaches for plain search rather than its heavier crawl or deep-research tools.
+    Search is our own server over Tavily rather than Tavily's, which let the
+    model ask for 20 results with raw page content — about 30k tokens a call,
+    several calls a turn, accumulating until the request blew past the model's
+    token limit. Ours fixes the breadth and truncates each result.
     Memory is a per-trader Qdrant collection run in local mode (no server needed);
     fastembed downloads its embedding model on first use.
     """
@@ -58,9 +59,8 @@ def researcher_mcp_servers(name: str) -> list[MCPServerStdio]:
         client_session_timeout_seconds=TIMEOUT,
     )
     search = MCPServerStdio(
-        {"command": "npx", "args": ["-y", "tavily-mcp@latest"], "env": tavily_env},
+        {"command": "uv", "args": ["run", "-m", "backend.research_server"], "cwd": PROJECT_DIR},
         client_session_timeout_seconds=TIMEOUT,
-        tool_filter=create_static_tool_filter(allowed_tool_names=["tavily_search"]),
     )
     memory = MCPServerStdio(
         {

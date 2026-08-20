@@ -23,12 +23,14 @@ lastnames = ["Patience", "Bold", "Systematic", "Crypto"]
 
 if USE_MANY_MODELS:
     # One model per trader, picked from the artificialanalysis.ai leaderboard for
-    # cost/quality balance on agentic tool use (Aug 2026). Grok and DeepSeek are
-    # reached through OpenRouter (the "/" in the name routes there).
+    # cost/quality balance on agentic tool use (Aug 2026). Everything but GPT is
+    # reached through OpenRouter (the "/" in the name routes there); Gemini went
+    # that way after Google's free tier answered 503 under load, which left the
+    # trader idle and its results incomparable with the others.
     model_names = [
         "gpt-5.6-sol",
         "x-ai/grok-4.5",
-        "gemini-3.7-flash",
+        "google/gemini-3.7-flash",
         "deepseek/deepseek-v4-flash",
     ]
     short_model_names = ["GPT 5.6 Sol", "Grok 4.5", "Gemini 3.7 Flash", "DeepSeek V4 Flash"]

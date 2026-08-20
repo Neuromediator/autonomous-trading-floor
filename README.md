@@ -16,10 +16,10 @@ Four traders — Warren (value), George (contrarian macro, shorts included), Ray
 Trader agent
 ├── MCP: accounts   (buy, sell, balance, holdings, change_strategy)
 ├── MCP: push       (notifications)
-├── MCP: market     (live prices via Massive)
+├── MCP: market     (live prices via Massive, through a shared cache)
 ├── Tool: Researcher agent
 │   ├── MCP: fetch          (read web pages)
-│   ├── MCP: tavily         (web search, filtered to plain search)
+│   ├── MCP: research       (web search via Tavily, fixed breadth)
 │   └── MCP: qdrant         (per-trader semantic memory, local mode)
 └── Tool: RiskManager agent
     └── MCP: accounts       (filtered to read-only tools)
@@ -70,9 +70,9 @@ Covers the account mechanics (including shorts), the risk limits, and the price 
 
 - The backend exposes a small read-only JSON API (`/api/traders`, `/api/traders/{name}`, `/api/traders/{name}/logs`, `/api/market`); the engine writes the SQLite database out of band. The Vite dev server proxies `/api`, so there is no CORS to configure.
 - Sub-agents are wrapped as tools (`agent.as_tool(...)`) rather than handoffs: the trader stays in control and gets an answer back.
-- Tool exposure is deliberately narrow — Tavily is filtered to plain search, and the RiskManager sees only the read-only account tools. Choosing what an agent can see is context engineering.
+- Tool exposure is deliberately narrow, and where a vendor's own MCP server is too broad it is replaced by a thin one of ours. The generic market server let agents explore REST endpoints the free plan rejects; the vendor search server let them request 20 results with raw page content (~30k tokens a call, several calls a turn) until requests exceeded the model's token limit. Ours fix the breadth in code. The RiskManager likewise sees only the read-only account tools. Choosing what an agent can see is context engineering.
 - Prices live in a SQLite cache shared by every process (the engine, each trader's accounts server, the API). A fresh hit skips the API call, a stale price beats a failing API, and a symbol with no price history raises — a trade fails loudly and is retried later rather than filling at a made-up price. There is no simulated fallback by design.
-- Each trader runs on a different provider (OpenAI, xAI, Google, DeepSeek) through OpenAI-compatible endpoints; Grok and DeepSeek are routed via OpenRouter. Set `USE_MANY_MODELS=false` to run everyone on one cheap model.
+- Each trader runs on a different provider (OpenAI, xAI, Google, DeepSeek) through OpenAI-compatible endpoints; everything but GPT is routed via OpenRouter, so a free tier throttling one provider cannot leave a trader idle and make the comparison meaningless. `get_model` still routes a name without a "/" to that provider's own endpoint when you have a direct key. Set `USE_MANY_MODELS=false` to run everyone on one cheap model.
 
 ## Credits
 
