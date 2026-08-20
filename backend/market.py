@@ -92,6 +92,20 @@ def get_share_price(symbol: str) -> float:
         ) from None
 
 
+def get_cached_share_price(symbol: str) -> float:
+    """Last known price for a symbol, however old, without spending API quota.
+
+    For the dashboard: it repriced every holding on each poll, and with the free
+    plan's 5 requests/minute that starved the traders' own price lookups. Only a
+    symbol never priced at all falls through to a live fetch.
+    """
+    symbol = symbol.upper()
+    cached = read_price(symbol)
+    if cached:
+        return cached[0]
+    return get_share_price(symbol)
+
+
 def get_share_price_massive(symbol: str) -> float:
     """Best price the plan allows, remembering the working tier to avoid repeat failures."""
     global plan_tier

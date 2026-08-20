@@ -1,7 +1,10 @@
 from datetime import datetime
 from .risk import MAX_POSITION_CONCENTRATION, MAX_SHORT_EXPOSURE
 
-note = "You have access to live market data tools; use them to look up share prices, trends, technical indicators and fundamentals."
+note = (
+    "You have a live market data tool to look up current share prices; "
+    "for trends, technical indicators and fundamentals, ask your Researcher."
+)
 
 
 def researcher_instructions():

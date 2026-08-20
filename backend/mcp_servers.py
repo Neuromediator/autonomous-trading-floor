@@ -10,23 +10,21 @@ PROJECT_DIR = str(Path(__file__).resolve().parent.parent)
 tavily_env = {"TAVILY_API_KEY": os.getenv("TAVILY_API_KEY")}
 TIMEOUT = 120
 
-# The market data server for the trader: Massive's own server, run locally over
-# stdio. A key is required — there is no simulated fallback.
-market_params = {
-    "command": "uvx",
-    "args": ["--with", "mcp<2", "--from", "git+https://github.com/massive-com/mcp_massive@v0.10.0", "mcp_massive"],
-    "env": {"MASSIVE_API_KEY": massive_api_key},
-}
-
-
 def trader_mcp_servers() -> list[MCPServerStdio]:
-    """The trader's MCP servers: our Accounts server, Push Notification and Market data."""
+    """The trader's MCP servers: our Accounts, Push Notification and Market data servers.
+
+    Market data is our own thin server over the shared price cache rather than
+    Massive's generic call_api server: the free plan rejects many endpoints
+    (HTTP 403) and allows 5 requests/minute, so agents exploring the raw API
+    wasted quota and turns. This way the price a trader sees is the price its
+    trade executes at.
+    """
     if not massive_api_key:
         raise RuntimeError("MASSIVE_API_KEY is not set; live market data is required to trade")
     params = [
         {"command": "uv", "args": ["run", "-m", "backend.accounts_server"], "cwd": PROJECT_DIR},
         {"command": "uv", "args": ["run", "-m", "backend.push_server"], "cwd": PROJECT_DIR},
-        market_params,
+        {"command": "uv", "args": ["run", "-m", "backend.market_server"], "cwd": PROJECT_DIR},
     ]
     return [MCPServerStdio(p, client_session_timeout_seconds=TIMEOUT) for p in params]
 

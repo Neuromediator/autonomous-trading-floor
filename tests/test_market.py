@@ -93,6 +93,21 @@ def test_non_rate_limit_error_is_not_retried(price_store, monkeypatch):
     assert sleeps == []
 
 
+def test_cached_price_never_spends_quota(price_store, monkeypatch):
+    price_store["AAPL"] = (100.0, time.time() - 999999)
+
+    def explode(symbol):
+        raise AssertionError("the API must not be called for a cached symbol")
+
+    monkeypatch.setattr(market, "get_share_price_massive", explode)
+    assert market.get_cached_share_price("AAPL") == 100.0
+
+
+def test_cached_price_falls_back_to_live_fetch_for_unknown_symbol(price_store, monkeypatch):
+    monkeypatch.setattr(market, "get_share_price_massive", lambda s: 42.0)
+    assert market.get_cached_share_price("MSFT") == 42.0
+
+
 def test_missing_key_raises(price_store, monkeypatch):
     monkeypatch.setattr(market, "massive_api_key", None)
     with pytest.raises(RuntimeError, match="MASSIVE_API_KEY"):

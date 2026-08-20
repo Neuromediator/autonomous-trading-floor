@@ -51,7 +51,7 @@ def holdings_detail(account: Account) -> list[dict]:
     """Current holdings enriched with price, market value and unrealised profit."""
     details = []
     for symbol, quantity in account.holdings.items():
-        price = market.get_share_price(symbol)
+        price = market.get_cached_share_price(symbol)
         cost = average_cost(account, symbol, quantity)
         details.append(
             {
