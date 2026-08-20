@@ -26,7 +26,10 @@ async function loadMarket(): Promise<void> {
       ? "Market open"
       : "Market closed";
     const tier = document.getElementById("market-tier")!;
-    tier.textContent = `Prices: ${market.tier}`;
+    // Older backends don't report the tier; show nothing rather than a gap or
+    // the word "undefined".
+    tier.hidden = !market.tier;
+    tier.textContent = market.tier ? `Prices: ${market.tier}` : "";
     tier.title =
       market.tier === "previous close"
         ? "The free data plan serves end-of-day prices. A position bought today is " +

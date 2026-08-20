@@ -49,8 +49,9 @@ export interface LogRow {
 
 export interface MarketInfo {
   source: "massive" | "offline";
-  /** Which price the data plan serves: "last trade", "previous close", … */
-  tier: string;
+  /** Which price the data plan serves: "last trade", "previous close", …
+   *  Absent when the backend predates the field. */
+  tier?: string;
   is_market_open: boolean;
 }
 
