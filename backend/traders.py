@@ -27,6 +27,14 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 MAX_TURNS = 30
 
+# The sub-agents run on one cheap model for every trader, not on the trader's
+# own. They do most of the token volume — the researcher's context grows with
+# every search result — so paying a frontier rate for summarising web pages
+# dominated the bill. Sharing one model also keeps the comparison honest: the
+# traders differ in their trading decisions, not in the quality of the research
+# handed to them.
+SUB_AGENT_MODEL = os.getenv("SUB_AGENT_MODEL", "deepseek/deepseek-v4-flash")
+
 # Providers reachable with a key of their own, for a model name that mentions
 # one and carries no "/". A name with a "/" goes to OpenRouter; a bare name the
 # table doesn't match is an OpenAI model.
@@ -61,26 +69,26 @@ def get_model(model_name: str):
     return model_name
 
 
-async def get_researcher(mcp_servers, model_name) -> Agent:
+async def get_researcher(mcp_servers) -> Agent:
     researcher = Agent(
         name="Researcher",
         instructions=researcher_instructions(),
-        model=get_model(model_name),
+        model=get_model(SUB_AGENT_MODEL),
         mcp_servers=mcp_servers,
     )
     return researcher
 
 
-async def get_researcher_tool(mcp_servers, model_name) -> Tool:
-    researcher = await get_researcher(mcp_servers, model_name)
+async def get_researcher_tool(mcp_servers) -> Tool:
+    researcher = await get_researcher(mcp_servers)
     return researcher.as_tool(tool_name="Researcher", tool_description=research_tool())
 
 
-async def get_risk_manager_tool(mcp_servers, model_name) -> Tool:
+async def get_risk_manager_tool(mcp_servers) -> Tool:
     risk_manager = Agent(
         name="RiskManager",
         instructions=risk_manager_instructions(),
-        model=get_model(model_name),
+        model=get_model(SUB_AGENT_MODEL),
         mcp_servers=mcp_servers,
     )
     return risk_manager.as_tool(tool_name="RiskManager", tool_description=risk_manager_tool())
@@ -95,8 +103,8 @@ class Trader:
         self.do_trade = True
 
     async def create_agent(self, trader_mcp_servers, researcher_mcp_servers, risk_mcp_servers) -> Agent:
-        researcher = await get_researcher_tool(researcher_mcp_servers, self.model_name)
-        risk_manager = await get_risk_manager_tool(risk_mcp_servers, self.model_name)
+        researcher = await get_researcher_tool(researcher_mcp_servers)
+        risk_manager = await get_risk_manager_tool(risk_mcp_servers)
         self.agent = Agent(
             name=self.name,
             instructions=trader_instructions(self.name),

@@ -29,6 +29,15 @@ with sqlite3.connect(DB) as conn:
             fetched_at REAL
         )
     ''')
+    # Shared search cache: four traders in one round ask near-identical
+    # questions, and each search costs a credit on the free plan.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS searches (
+            query TEXT PRIMARY KEY,
+            response TEXT,
+            fetched_at REAL
+        )
+    ''')
     conn.commit()
 
 def write_account(name, account_dict):
@@ -65,6 +74,25 @@ def read_price(symbol: str):
     with sqlite3.connect(DB) as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT price, fetched_at FROM prices WHERE symbol = ?', (symbol.upper(),))
+        row = cursor.fetchone()
+        return (row[0], row[1]) if row else None
+
+def write_search(query: str, response: str, fetched_at: float):
+    """Store a search response under its normalised query."""
+    with sqlite3.connect(DB) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO searches (query, response, fetched_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(query) DO UPDATE SET response=excluded.response, fetched_at=excluded.fetched_at
+        ''', (query, response, fetched_at))
+        conn.commit()
+
+def read_search(query: str):
+    """Return (response, fetched_at) for a query, or None if never searched."""
+    with sqlite3.connect(DB) as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT response, fetched_at FROM searches WHERE query = ?', (query,))
         row = cursor.fetchone()
         return (row[0], row[1]) if row else None
 

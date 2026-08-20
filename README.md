@@ -10,7 +10,7 @@ An equity trading simulation where four autonomous LLM agents manage virtual por
 
 ## How it works
 
-Four traders — Warren (value), George (contrarian macro, shorts included), Ray (systematic), Cathie (crypto ETFs) — run on a timer, one after another so they don't burst through rate limits. Each runs on a different model (GPT‑5.6 Sol, Grok 4.5, Gemini 3.7 Flash, DeepSeek V4 Flash — picked from the [Artificial Analysis](https://artificialanalysis.ai/) leaderboard for cost/quality on agentic tool use), and each is an agent with its own MCP servers and two sub-agents wrapped as tools:
+Four traders — Warren (value), George (contrarian macro, shorts included), Ray (systematic), Cathie (crypto ETFs) — run on a timer, one after another so they don't burst through rate limits. Each runs on a model from a different lab (GPT‑5.6 Luna, GLM 4.7, Gemini 3.7 Flash, DeepSeek V4 Flash), all in the same price class so the comparison is between trading decisions rather than budgets, and each is an agent with its own MCP servers and two sub-agents wrapped as tools:
 
 ```
 Trader agent
@@ -72,7 +72,9 @@ Covers the account mechanics (including shorts), the risk limits, and the price 
 - Sub-agents are wrapped as tools (`agent.as_tool(...)`) rather than handoffs: the trader stays in control and gets an answer back.
 - Tool exposure is deliberately narrow, and where a vendor's own MCP server is too broad it is replaced by a thin one of ours. The generic market server let agents explore REST endpoints the free plan rejects; the vendor search server let them request 20 results with raw page content (~30k tokens a call, several calls a turn) until requests exceeded the model's token limit. Ours fix the breadth in code. The RiskManager likewise sees only the read-only account tools. Choosing what an agent can see is context engineering.
 - Prices live in a SQLite cache shared by every process (the engine, each trader's accounts server, the API). A fresh hit skips the API call, a stale price beats a failing API, and a symbol with no price history raises — a trade fails loudly and is retried later rather than filling at a made-up price. There is no simulated fallback by design.
-- Each trader runs on a different provider (OpenAI, xAI, Google, DeepSeek) through OpenAI-compatible endpoints; everything but GPT is routed via OpenRouter, so a free tier throttling one provider cannot leave a trader idle and make the comparison meaningless. `get_model` still routes a name without a "/" to that provider's own endpoint when you have a direct key. Set `USE_MANY_MODELS=false` to run everyone on one cheap model.
+- Each trader runs on a different provider (OpenAI, Z.ai, Google, DeepSeek) through OpenAI-compatible endpoints, all routed via OpenRouter so that a free tier throttling one provider cannot leave a trader idle and make the comparison meaningless. `get_model` still routes a name without a "/" to that provider's own endpoint when you have a direct key. Set `USE_MANY_MODELS=false` to run everyone on one cheap model.
+- The Researcher and RiskManager run on one cheap model shared by all four traders (`SUB_AGENT_MODEL`). They account for most of the token volume — the researcher's context grows with every search result — so paying a frontier rate there dominated the bill, and sharing one model means the traders differ in their decisions rather than in the research handed to them.
+- Everything bought from an external API is cached in the database and capped in code: prices by TTL, and searches both by TTL and by a per-run budget. Four traders in a round ask near-identical questions, and each search costs a credit.
 
 ## Credits
 

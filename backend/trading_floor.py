@@ -2,7 +2,7 @@ from .traders import Trader
 from typing import List
 import asyncio
 from .tracers import LogTracer
-from agents import add_trace_processor
+from agents import add_trace_processor, set_trace_processors
 from .market import is_market_open
 from dotenv import load_dotenv
 import os
@@ -17,23 +17,29 @@ RUN_EVEN_WHEN_MARKET_IS_CLOSED = (
     os.getenv("RUN_EVEN_WHEN_MARKET_IS_CLOSED", "false").strip().lower() == "true"
 )
 USE_MANY_MODELS = os.getenv("USE_MANY_MODELS", "true").strip().lower() == "true"
+# The SDK uploads traces to OpenAI's dashboard, authorised with OPENAI_API_KEY
+# even when no trader runs on an OpenAI model. Set OPENAI_TRACING=false to keep
+# them local; the dashboard's activity log comes from LogTracer either way.
+OPENAI_TRACING = os.getenv("OPENAI_TRACING", "true").strip().lower() == "true"
 
 names = ["Warren", "George", "Ray", "Cathie"]
 lastnames = ["Patience", "Bold", "Systematic", "Crypto"]
 
 if USE_MANY_MODELS:
-    # One model per trader, picked from the artificialanalysis.ai leaderboard for
-    # cost/quality balance on agentic tool use (Aug 2026). Everything but GPT is
-    # reached through OpenRouter (the "/" in the name routes there); Gemini went
-    # that way after Google's free tier answered 503 under load, which left the
-    # trader idle and its results incomparable with the others.
+    # One model per trader, all from four different labs and all in the same
+    # price class, so the comparison is between trading decisions rather than
+    # between budgets. Frontier models were tried first and cost 30-50x as much
+    # per run for no visible edge over a handful of rounds. Everything goes
+    # through OpenRouter (the "/" in the name routes there): a free tier
+    # throttling one provider would leave that trader idle and its results
+    # incomparable with the rest.
     model_names = [
-        "gpt-5.6-sol",
-        "x-ai/grok-4.5",
+        "openai/gpt-5.6-luna",
+        "z-ai/glm-4.7",
         "google/gemini-3.7-flash",
         "deepseek/deepseek-v4-flash",
     ]
-    short_model_names = ["GPT 5.6 Sol", "Grok 4.5", "Gemini 3.7 Flash", "DeepSeek V4 Flash"]
+    short_model_names = ["GPT 5.6 Luna", "GLM 4.7", "Gemini 3.7 Flash", "DeepSeek V4 Flash"]
 else:
     model_names = ["gpt-5.6-luna"] * 4
     short_model_names = ["GPT 5.6 Luna"] * 4
@@ -47,7 +53,10 @@ def create_traders() -> List[Trader]:
 
 
 async def run_every_n_minutes():
-    add_trace_processor(LogTracer())
+    if OPENAI_TRACING:
+        add_trace_processor(LogTracer())
+    else:
+        set_trace_processors([LogTracer()])
     traders = create_traders()
     while True:
         if RUN_EVEN_WHEN_MARKET_IS_CLOSED or is_market_open():
