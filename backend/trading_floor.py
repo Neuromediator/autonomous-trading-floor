@@ -29,12 +29,12 @@ if USE_MANY_MODELS:
     # One model per trader, all from four different labs and all in the same
     # price class, so the comparison is between trading decisions rather than
     # between budgets. Frontier models were tried first and cost 30-50x as much
-    # per run for no visible edge over a handful of rounds. Everything goes
-    # through OpenRouter (the "/" in the name routes there): a free tier
-    # throttling one provider would leave that trader idle and its results
-    # incomparable with the rest.
+    # per run for no visible edge over a handful of rounds. The others go
+    # through OpenRouter (the "/" in the name routes there); Warren goes to
+    # OpenAI directly, which puts his raw requests in the platform's Responses
+    # log. Traces reach the platform either way.
     model_names = [
-        "openai/gpt-5.6-luna",
+        "gpt-5.6-luna",
         "z-ai/glm-4.7",
         "google/gemini-3.7-flash",
         "deepseek/deepseek-v4-flash",
