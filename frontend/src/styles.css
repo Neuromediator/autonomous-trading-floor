@@ -132,6 +132,13 @@ body {
   font-size: 11px;
   color: var(--fg-muted);
 }
+/* Which price the plan serves: on the free tier, end-of-day. Dimmer than the
+   status above it — a caveat, not a headline. Hover explains what it implies. */
+.market-tier {
+  font-size: 11px;
+  color: var(--fg-dim);
+  cursor: help;
+}
 
 .returns {
   display: flex;

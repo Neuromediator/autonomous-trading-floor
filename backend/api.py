@@ -83,7 +83,11 @@ def get_traders() -> list[dict]:
 def get_market() -> dict:
     """Which price source is live, and whether the market is open."""
     source = "massive" if market.massive_api_key else "offline"
-    return {"source": source, "is_market_open": market.is_market_open()}
+    return {
+        "source": source,
+        "tier": market.price_tier_label(),
+        "is_market_open": market.is_market_open(),
+    }
 
 
 @app.get("/api/traders/{name}")

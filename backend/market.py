@@ -11,6 +11,7 @@ raises, so a trade fails loudly instead of executing at a made-up price.
 
 import os
 import time
+from functools import lru_cache
 from dotenv import load_dotenv
 from massive import RESTClient
 from .database import read_price, write_price
@@ -48,6 +49,29 @@ def _previous_close(client: RESTClient, symbol: str) -> float:
 # so we remember the first tier that works and start there next time.
 price_methods = [_last_trade, _snapshot, _previous_close]
 plan_tier = 0
+
+TIER_LABELS = ["last trade", "15-minute snapshot", "previous close"]
+
+
+@lru_cache(maxsize=1)
+def price_tier_label(probe_symbol: str = "SPY") -> str:
+    """Which price the plan actually serves, probed once per process.
+
+    Worth surfacing: on the free plan every call returns the previous close, so
+    a position bought today is valued at the price it was bought at and only
+    moves after the next close. Reading profit as intraday performance would be
+    wrong, and the dashboard says so.
+    """
+    if not massive_api_key:
+        return "unavailable"
+    client = RESTClient(massive_api_key)
+    for tier, method in enumerate(price_methods):
+        try:
+            method(client, probe_symbol)
+            return TIER_LABELS[tier]
+        except Exception:
+            continue
+    return "unavailable"
 
 
 def get_share_price(symbol: str) -> float:

@@ -25,6 +25,14 @@ async function loadMarket(): Promise<void> {
     document.getElementById("market-status")!.textContent = market.is_market_open
       ? "Market open"
       : "Market closed";
+    const tier = document.getElementById("market-tier")!;
+    tier.textContent = `Prices: ${market.tier}`;
+    tier.title =
+      market.tier === "previous close"
+        ? "The free data plan serves end-of-day prices. A position bought today is " +
+          "valued at the price it was bought at, so profit and loss appear only " +
+          "after the next close — these are not intraday returns."
+        : `Portfolios are valued at the ${market.tier} price.`;
   } catch (err) {
     console.error("market fetch failed", err);
   }
