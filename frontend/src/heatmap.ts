@@ -1,9 +1,13 @@
 // Holdings heatmap: one tile per symbol, size proportional to market value,
 // colour by unrealised profit. Tiles flash green or red when the price ticks.
+// A neutral cash tile completes the picture, so tile sizes read as shares of
+// the whole portfolio, not just of the invested part.
 
 import type { Holding } from "./api";
 
 const FLASH_MS = 600;
+// Its own namespace, so a real ticker named CASH could never collide.
+const CASH_KEY = "·cash·";
 
 export class Heatmap {
   private host: HTMLElement;
@@ -14,8 +18,13 @@ export class Heatmap {
     host.classList.add("heatmap");
   }
 
-  render(holdings: Holding[], priceDirections: Record<string, "up" | "down" | "same">): void {
+  render(
+    holdings: Holding[],
+    priceDirections: Record<string, "up" | "down" | "same">,
+    cash = 0,
+  ): void {
     const symbols = new Set(holdings.map((h) => h.symbol));
+    if (holdings.length > 0) symbols.add(CASH_KEY);
 
     for (const [symbol, el] of this.tiles) {
       if (!symbols.has(symbol)) {
@@ -31,7 +40,7 @@ export class Heatmap {
     delete this.host.dataset.empty;
 
     // Short positions carry a negative market value; size tiles by exposure.
-    const totalValue = holdings.reduce((s, h) => s + Math.abs(h.market_value), 0);
+    const totalValue = holdings.reduce((s, h) => s + Math.abs(h.market_value), 0) + cash;
 
     for (const h of holdings) {
       const share = totalValue > 0 ? Math.abs(h.market_value) / totalValue : 1 / holdings.length;
@@ -49,6 +58,16 @@ export class Heatmap {
       const dir = priceDirections[h.symbol];
       if (dir === "up" || dir === "down") flash(tile, dir);
     }
+
+    let cashTile = this.tiles.get(CASH_KEY);
+    if (!cashTile) {
+      cashTile = this.createTile("Cash");
+      cashTile.dataset.pnl = "cash";
+      this.host.append(cashTile);
+      this.tiles.set(CASH_KEY, cashTile);
+    }
+    cashTile.style.flexGrow = String(Math.max(0.05, totalValue > 0 ? cash / totalValue : 0));
+    cashTile.querySelector(".heatmap-value")!.textContent = formatMoney(cash);
   }
 
   private createTile(symbol: string): HTMLElement {

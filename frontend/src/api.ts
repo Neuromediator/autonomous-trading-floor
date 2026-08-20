@@ -66,7 +66,9 @@ export function getTrader(name: string): Promise<TraderDetail> {
   return get(`/api/traders/${encodeURIComponent(name)}`);
 }
 
-export function getTraderLogs(name: string, lastN = 13): Promise<LogRow[]> {
+// Deep enough to cover a whole trading run (a busy one produces several
+// hundred rows); the payload is small and polled at a relaxed interval.
+export function getTraderLogs(name: string, lastN = 300): Promise<LogRow[]> {
   return get(`/api/traders/${encodeURIComponent(name)}/logs?last_n=${lastN}`);
 }
 

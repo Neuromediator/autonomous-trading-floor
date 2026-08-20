@@ -5,7 +5,7 @@
 
 import type { Transaction } from "./api";
 
-const MAX_ROWS = 12;
+const MAX_ROWS = 100;
 
 export class TransactionsView {
   private host: HTMLElement;

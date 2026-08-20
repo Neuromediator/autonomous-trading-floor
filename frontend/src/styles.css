@@ -336,6 +336,10 @@ body {
 .heatmap-tile[data-pnl="down"] {
   background: color-mix(in srgb, var(--trend-down) 20%, var(--bg-sunk));
 }
+.heatmap-tile[data-pnl="cash"] {
+  background: color-mix(in srgb, var(--fg-dim) 14%, var(--bg-sunk));
+  color: var(--fg-dim);
+}
 
 .heatmap-ticker {
   font-weight: 600;

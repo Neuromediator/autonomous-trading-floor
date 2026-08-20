@@ -71,7 +71,7 @@ export class TraderPanel {
       this.valueEl.dataset.trend = trend;
       this.pnlEl.dataset.trend = trend;
       this.pnlEl.textContent = formatPnl(detail.pnl);
-      this.heatmap.render(detail.holdings, this.state.priceDirections());
+      this.heatmap.render(detail.holdings, this.state.priceDirections(), detail.balance);
       this.state.rememberPrices();
       const strategy = detail.strategy.trim();
       this.strategyEl.textContent = strategy || "No strategy set yet";
