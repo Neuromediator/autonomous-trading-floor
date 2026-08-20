@@ -1,4 +1,5 @@
 from contextlib import AsyncExitStack
+from functools import lru_cache
 from .accounts_client import read_accounts_resource, read_strategy_resource
 from .tracers import make_trace_id
 from agents import Agent, Tool, Runner, OpenAIChatCompletionsModel, trace
@@ -19,11 +20,6 @@ from .mcp_servers import trader_mcp_servers, researcher_mcp_servers, risk_manage
 
 load_dotenv(override=True)
 
-deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
-google_api_key = os.getenv("GOOGLE_API_KEY")
-grok_api_key = os.getenv("GROK_API_KEY")
-openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 GROK_BASE_URL = "https://api.x.ai/v1"
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
@@ -31,23 +27,38 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 MAX_TURNS = 30
 
-openrouter_client = AsyncOpenAI(base_url=OPENROUTER_BASE_URL, api_key=openrouter_api_key)
-deepseek_client = AsyncOpenAI(base_url=DEEPSEEK_BASE_URL, api_key=deepseek_api_key)
-grok_client = AsyncOpenAI(base_url=GROK_BASE_URL, api_key=grok_api_key)
-gemini_client = AsyncOpenAI(base_url=GEMINI_BASE_URL, api_key=google_api_key)
+# Providers reachable with a key of their own, for a model name that mentions
+# one and carries no "/". A name with a "/" goes to OpenRouter; a bare name the
+# table doesn't match is an OpenAI model.
+DIRECT_PROVIDERS = {
+    "deepseek": ("DEEPSEEK_API_KEY", DEEPSEEK_BASE_URL),
+    "grok": ("GROK_API_KEY", GROK_BASE_URL),
+    "gemini": ("GOOGLE_API_KEY", GEMINI_BASE_URL),
+}
+
+
+@lru_cache(maxsize=None)
+def provider_client(key_name: str, base_url: str) -> AsyncOpenAI:
+    """A client for one provider, built on first use.
+
+    The key is required rather than left to the OpenAI SDK, which silently falls
+    back to OPENAI_API_KEY and would send it to another provider's endpoint.
+    """
+    api_key = os.getenv(key_name)
+    if not api_key:
+        raise RuntimeError(f"{key_name} is not set; it is required to reach {base_url}")
+    return AsyncOpenAI(base_url=base_url, api_key=api_key)
 
 
 def get_model(model_name: str):
     if "/" in model_name:
-        return OpenAIChatCompletionsModel(model=model_name, openai_client=openrouter_client)
-    elif "deepseek" in model_name:
-        return OpenAIChatCompletionsModel(model=model_name, openai_client=deepseek_client)
-    elif "grok" in model_name:
-        return OpenAIChatCompletionsModel(model=model_name, openai_client=grok_client)
-    elif "gemini" in model_name:
-        return OpenAIChatCompletionsModel(model=model_name, openai_client=gemini_client)
-    else:
-        return model_name
+        client = provider_client("OPENROUTER_API_KEY", OPENROUTER_BASE_URL)
+        return OpenAIChatCompletionsModel(model=model_name, openai_client=client)
+    for provider, (key_name, base_url) in DIRECT_PROVIDERS.items():
+        if provider in model_name:
+            client = provider_client(key_name, base_url)
+            return OpenAIChatCompletionsModel(model=model_name, openai_client=client)
+    return model_name
 
 
 async def get_researcher(mcp_servers, model_name) -> Agent:
