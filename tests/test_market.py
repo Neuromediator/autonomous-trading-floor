@@ -50,6 +50,49 @@ def test_unknown_symbol_raises_instead_of_inventing_a_price(price_store, monkeyp
         market.get_share_price("AAPL")
 
 
+def test_rate_limit_is_retried_until_a_price_arrives(price_store, monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(market.time, "sleep", sleeps.append)
+    attempts = []
+
+    def flaky(symbol):
+        attempts.append(symbol)
+        if len(attempts) < 2:
+            raise RuntimeError("HTTP 429 Too Many Requests")
+        return 100.0
+
+    monkeypatch.setattr(market, "get_share_price_massive", flaky)
+    assert market.get_share_price("AAPL") == 100.0
+    assert sleeps == [market.RATE_LIMIT_WAITS_SECONDS[0]]
+    assert price_store["AAPL"][0] == 100.0
+
+
+def test_rate_limit_gives_up_after_all_waits(price_store, monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(market.time, "sleep", sleeps.append)
+
+    def limited(symbol):
+        raise RuntimeError("HTTP 429 Too Many Requests")
+
+    monkeypatch.setattr(market, "get_share_price_massive", limited)
+    with pytest.raises(RuntimeError, match="No price available"):
+        market.get_share_price("AAPL")
+    assert sleeps == market.RATE_LIMIT_WAITS_SECONDS
+
+
+def test_non_rate_limit_error_is_not_retried(price_store, monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(market.time, "sleep", sleeps.append)
+
+    def down(symbol):
+        raise RuntimeError("Massive is down")
+
+    monkeypatch.setattr(market, "get_share_price_massive", down)
+    with pytest.raises(RuntimeError, match="No price available"):
+        market.get_share_price("AAPL")
+    assert sleeps == []
+
+
 def test_missing_key_raises(price_store, monkeypatch):
     monkeypatch.setattr(market, "massive_api_key", None)
     with pytest.raises(RuntimeError, match="MASSIVE_API_KEY"):

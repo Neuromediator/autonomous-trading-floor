@@ -4,7 +4,8 @@ MASSIVE_API_KEY is required: there is no simulated fallback, so a portfolio can
 never mix real and synthetic prices. Prices are cached in the accounts database,
 shared by every process (the engine, each trader's accounts server, the API).
 A fresh cache hit is served without an API call; when Massive is unavailable
-the last known price is used however old it is; a symbol never priced before
+the last known price is used however old it is. A symbol never priced before
+is retried through the free plan's per-minute rate limit window before it
 raises, so a trade fails loudly instead of executing at a made-up price.
 """
 
@@ -19,6 +20,15 @@ load_dotenv(override=True)
 massive_api_key = os.getenv("MASSIVE_API_KEY")
 
 CACHE_TTL_SECONDS = 120
+# The free Massive plan allows 5 requests/minute; when a burst hits that limit
+# and the symbol has never been priced, waiting out the window is the only way
+# to price it. Waits must stay well under the 120s MCP session timeout.
+RATE_LIMIT_WAITS_SECONDS = [20, 30]
+
+
+def _is_rate_limited(error: Exception) -> bool:
+    text = str(error).lower()
+    return "429" in text or "too many requests" in text or "rate limit" in text
 
 
 def _last_trade(client: RESTClient, symbol: str) -> float:
@@ -61,6 +71,21 @@ def get_share_price(symbol: str) -> float:
         if cached:
             print(f"Massive API unavailable ({e}); using the last known price for {symbol}")
             return cached[0]
+        for wait in RATE_LIMIT_WAITS_SECONDS:
+            if not _is_rate_limited(e):
+                break
+            print(f"Massive rate limit hit pricing {symbol}; retrying in {wait}s")
+            time.sleep(wait)
+            # Another process may have priced the symbol while we waited.
+            cached = read_price(symbol)
+            if cached:
+                return cached[0]
+            try:
+                price = get_share_price_massive(symbol)
+                write_price(symbol, price, time.time())
+                return price
+            except Exception as retry_error:
+                e = retry_error
         raise RuntimeError(
             f"No price available for {symbol}: the market data API is unavailable "
             f"and no earlier price is cached. Try again shortly. ({e})"
@@ -71,14 +96,16 @@ def get_share_price_massive(symbol: str) -> float:
     """Best price the plan allows, remembering the working tier to avoid repeat failures."""
     global plan_tier
     client = RESTClient(massive_api_key)
+    last_error: Exception | None = None
     for tier in range(plan_tier, len(price_methods)):
         try:
             price = price_methods[tier](client, symbol)
             plan_tier = tier
             return price
-        except Exception:
+        except Exception as e:
+            last_error = e
             continue
-    raise RuntimeError(f"No Massive price available for {symbol}")
+    raise RuntimeError(f"No Massive price available for {symbol} ({last_error})")
 
 
 def is_market_open() -> bool:
