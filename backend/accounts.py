@@ -3,7 +3,7 @@ import json
 from dotenv import load_dotenv
 from datetime import datetime
 from .market import get_share_price
-from .database import write_account, read_account, write_log
+from .database import write_account, read_account, write_log, write_strategy
 from .risk import check_trade
 
 load_dotenv(override=True)
@@ -174,6 +174,9 @@ class Account(BaseModel):
     def change_strategy(self, strategy: str) -> str:
         """ At your discretion, if you choose to, call this to change your investment strategy for the future """
         self.strategy = strategy
+        # The new text replaces the old one, so keep every revision: how a
+        # strategy evolved is the clearest evidence the feedback loop works.
+        write_strategy(self.name, strategy)
         self.save()
         write_log(self.name, "account", "Changed strategy")
         return "Changed strategy"

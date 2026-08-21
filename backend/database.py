@@ -38,6 +38,16 @@ with sqlite3.connect(DB) as conn:
             fetched_at REAL
         )
     ''')
+    # Every strategy the traders have written, so the self-improvement loop
+    # leaves a trail: change_strategy replaces the text outright.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS strategies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            datetime DATETIME,
+            strategy TEXT
+        )
+    ''')
     conn.commit()
 
 def write_account(name, account_dict):
@@ -95,6 +105,25 @@ def read_search(query: str):
         cursor.execute('SELECT response, fetched_at FROM searches WHERE query = ?', (query,))
         row = cursor.fetchone()
         return (row[0], row[1]) if row else None
+
+def write_strategy(name: str, strategy: str):
+    """Append a strategy revision for a trader."""
+    with sqlite3.connect(DB) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO strategies (name, datetime, strategy)
+            VALUES (?, datetime('now'), ?)
+        ''', (name.lower(), strategy))
+        conn.commit()
+
+def read_strategies(name: str):
+    """Every strategy revision for a trader, oldest first."""
+    with sqlite3.connect(DB) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT datetime, strategy FROM strategies WHERE name = ? ORDER BY id
+        ''', (name.lower(),))
+        return cursor.fetchall()
 
 def write_log(name: str, type: str, message: str):
     """

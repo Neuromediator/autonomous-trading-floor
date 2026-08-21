@@ -13,7 +13,8 @@ from fastapi import FastAPI, HTTPException
 
 from backend import market
 from backend.accounts import Account
-from backend.database import read_log
+from backend.database import read_log, read_strategies
+from backend.templates import persona
 from backend.trading_floor import names, lastnames, short_model_names
 
 # Mirrors the log colours in demo/ so the frontend reproduces the same panel.
@@ -102,7 +103,9 @@ def get_trader(name: str) -> dict:
         "lastname": trader["lastname"],
         "model_name": trader["model_name"],
         "balance": account.balance,
+        "persona": persona(trader["name"]),
         "strategy": account.strategy,
+        "strategy_revisions": len(read_strategies(name)),
         "portfolio_value": portfolio_value,
         "pnl": account.calculate_profit_loss(portfolio_value),
         "holdings": holdings,
@@ -120,3 +123,10 @@ def get_trader_logs(name: str, last_n: int = 13) -> list[dict]:
         {"datetime": ts, "type": kind, "message": message, "color": LOG_COLORS.get(kind, DEFAULT_LOG_COLOR)}
         for ts, kind, message in rows
     ]
+
+
+@app.get("/api/traders/{name}/strategies")
+def get_trader_strategies(name: str) -> list[dict]:
+    """Every strategy the trader has written, oldest first."""
+    require_trader(name)
+    return [{"datetime": ts, "strategy": strategy} for ts, strategy in read_strategies(name)]

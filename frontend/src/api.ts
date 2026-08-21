@@ -32,7 +32,11 @@ export interface TimePoint {
 // Mirrors the full backend payload; the dashboard renders a subset of these fields.
 export interface TraderDetail extends TraderInfo {
   balance: number;
+  /** The trader's fixed mandate, set in code and not rewritable by the agent. */
+  persona: string;
   strategy: string;
+  /** How many times the agent has rewritten its own strategy. */
+  strategy_revisions: number;
   portfolio_value: number;
   pnl: number;
   holdings: Holding[];

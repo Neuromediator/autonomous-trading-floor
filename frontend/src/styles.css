@@ -276,8 +276,36 @@ body {
 .panel-pnl[data-trend="up"] { color: var(--trend-up); }
 .panel-pnl[data-trend="down"] { color: var(--trend-down); }
 
-.panel-strategy {
+/* The fixed mandate, above the strategy the agent rewrites. Italic and dimmer
+   so the two never read as one block of text. */
+.panel-persona {
   margin-top: 6px;
+  max-width: 94%;
+  font-size: 11px;
+  line-height: 1.4;
+  font-style: italic;
+  color: var(--fg-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  cursor: pointer;
+}
+.panel-persona.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+
+.panel-strategy-label {
+  margin-top: 8px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+}
+
+.panel-strategy {
+  margin-top: 2px;
   max-width: 94%;
   font-size: 11px;
   line-height: 1.4;

@@ -17,6 +17,8 @@ export class TraderPanel {
   private valueEl: HTMLElement;
   private pnlEl: HTMLElement;
   private strategyEl: HTMLElement;
+  private personaEl: HTMLElement;
+  private strategyLabelEl: HTMLElement;
 
   constructor(state: TraderState) {
     this.state = state;
@@ -29,6 +31,8 @@ export class TraderPanel {
         <span class="panel-sub"></span>
         <span class="panel-value" data-trend="flat">$0</span>
         <span class="panel-pnl"></span>
+        <span class="panel-persona"></span>
+        <span class="panel-strategy-label"></span>
         <span class="panel-strategy"></span>
       </header>
       <div class="panel-chart"></div>
@@ -49,6 +53,9 @@ export class TraderPanel {
     this.valueEl = this.root.querySelector(".panel-value")!;
     this.pnlEl = this.root.querySelector(".panel-pnl")!;
     this.strategyEl = this.root.querySelector(".panel-strategy")!;
+    this.personaEl = this.root.querySelector(".panel-persona")!;
+    this.strategyLabelEl = this.root.querySelector(".panel-strategy-label")!;
+    this.personaEl.addEventListener("click", () => this.personaEl.classList.toggle("expanded"));
     // The two-line clamp hides most of the strategy; a click unfolds it.
     this.strategyEl.addEventListener("click", () => this.strategyEl.classList.toggle("expanded"));
     this.heatmap = new Heatmap(this.root.querySelector(".panel-heatmap")!);
@@ -73,6 +80,15 @@ export class TraderPanel {
       this.pnlEl.textContent = formatPnl(detail.pnl);
       this.heatmap.render(detail.holdings, this.state.priceDirections(), detail.balance);
       this.state.rememberPrices();
+      const persona = detail.persona.trim();
+      this.personaEl.textContent = persona;
+      this.personaEl.title = persona;
+      this.personaEl.hidden = !persona;
+      // The mandate is fixed; the strategy below it is the agent's own, and the
+      // revision count is the visible trace of it rewriting itself.
+      this.strategyLabelEl.textContent = detail.strategy_revisions
+        ? `Strategy · rev ${detail.strategy_revisions}`
+        : "Strategy · as seeded";
       const strategy = detail.strategy.trim();
       this.strategyEl.textContent = strategy || "No strategy set yet";
       this.strategyEl.title = strategy;
