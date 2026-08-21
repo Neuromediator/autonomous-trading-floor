@@ -2,8 +2,9 @@
 // colour by unrealised profit. Tiles flash green or red when the price ticks.
 // A neutral cash tile completes the picture, so tile sizes read as shares of
 // the whole portfolio, not just of the invested part. Positions are ranked by
-// exposure and the tail is merged into one tile, because a panel only fits so
-// many tiles before the sizes stop meaning anything.
+// exposure and a tail of three or more is merged into one tile, because a panel
+// only fits so many tiles before the sizes stop meaning anything; clicking that
+// tile unfolds the rest.
 
 import type { Holding } from "./api";
 
@@ -19,6 +20,9 @@ const MAX_HOLDING_TILES = 8;
 export class Heatmap {
   private host: HTMLElement;
   private tiles = new Map<string, HTMLElement>();
+  private showAll = false;
+  /** Last render's inputs, so the merge tile can redraw on click. */
+  private last: [Holding[], Record<string, "up" | "down" | "same">, number] | null = null;
 
   constructor(host: HTMLElement) {
     this.host = host;
@@ -44,12 +48,17 @@ export class Heatmap {
     const ranked = [...holdings].sort(
       (a, b) => Math.abs(b.market_value) - Math.abs(a.market_value),
     );
-    const shown = ranked.slice(0, MAX_HOLDING_TILES);
-    const merged = ranked.slice(MAX_HOLDING_TILES);
+    this.last = [holdings, priceDirections, cash];
+    // Merging a single position saves no room — the tile costs what the ticker
+    // would — so only fold a tail of two or more, and let a click unfold it.
+    const tail = ranked.length - MAX_HOLDING_TILES;
+    const foldable = tail >= 2 && !this.showAll;
+    const shown = foldable ? ranked.slice(0, MAX_HOLDING_TILES) : ranked;
+    const merged = foldable ? ranked.slice(MAX_HOLDING_TILES) : [];
 
     const live = new Set(shown.map((h) => h.symbol));
     live.add(CASH_KEY);
-    if (merged.length > 0) live.add(REST_KEY);
+    if (merged.length > 0 || this.showAll) live.add(REST_KEY);
     for (const [key, el] of this.tiles) {
       if (!live.has(key)) {
         el.remove();
@@ -78,17 +87,21 @@ export class Heatmap {
       if (dir === "up" || dir === "down") flash(tile, dir);
     }
 
-    if (merged.length > 0) {
+    if (merged.length > 0 || this.showAll) {
       const value = merged.reduce((s, h) => s + Math.abs(h.market_value), 0);
-      const tile = this.tile(REST_KEY, `+${merged.length} more`);
+      const tile = this.tile(REST_KEY, "more");
       order.push(REST_KEY);
       tile.dataset.pnl = "rest";
       tile.style.flexGrow = String(shareOf(value));
-      tile.querySelector(".heatmap-ticker")!.textContent = `+${merged.length} more`;
-      tile.querySelector(".heatmap-value")!.textContent = formatMoney(value);
-      tile.title = merged
-        .map((h) => `${h.symbol}: ${h.quantity} @ $${h.price.toFixed(2)}`)
-        .join("\n");
+      tile.querySelector(".heatmap-ticker")!.textContent = this.showAll
+        ? "show less"
+        : `+${merged.length} more`;
+      tile.querySelector(".heatmap-value")!.textContent = this.showAll
+        ? ""
+        : formatMoney(value);
+      tile.title = this.showAll
+        ? "Fold the smallest positions back into one tile"
+        : merged.map((h) => `${h.symbol}: ${h.quantity} @ $${h.price.toFixed(2)}`).join("\n");
     }
 
     const cashTile = this.tile(CASH_KEY, "Cash");
@@ -106,6 +119,12 @@ export class Heatmap {
     let tile = this.tiles.get(key);
     if (!tile) {
       tile = this.createTile(label);
+      if (key === REST_KEY) {
+        tile.addEventListener("click", () => {
+          this.showAll = !this.showAll;
+          if (this.last) this.render(...this.last);
+        });
+      }
       this.host.append(tile);
       this.tiles.set(key, tile);
     }

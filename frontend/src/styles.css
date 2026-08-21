@@ -382,6 +382,16 @@ body {
   background: color-mix(in srgb, var(--fg-dim) 14%, var(--bg-sunk));
   color: var(--fg-dim);
 }
+/* The fold tile is a control, not a position: wide enough for its label at any
+   portfolio weight, and it says so on hover. */
+.heatmap-tile[data-pnl="rest"] {
+  min-width: 84px;
+  cursor: pointer;
+}
+.heatmap-tile[data-pnl="rest"]:hover {
+  background: color-mix(in srgb, var(--fg-dim) 24%, var(--bg-sunk));
+  color: var(--fg);
+}
 
 .heatmap-ticker {
   font-weight: 600;
