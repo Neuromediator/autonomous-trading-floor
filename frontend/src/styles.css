@@ -57,17 +57,23 @@ body {
 
 /* ---- Sidebar ---- */
 
+/* The aside stretches to the full height of the grid row, so its background and
+   border run the whole length of the page however far it scrolls. The column
+   inside it is what sticks to the viewport. */
 .sidebar {
+  background: var(--bg-raised);
+  border-right: 1px solid var(--border);
+}
+
+.sidebar-inner {
   position: sticky;
   top: 0;
-  align-self: start;
-  height: 100vh;
+  min-height: 100vh;
+  max-height: 100vh;
   display: flex;
   flex-direction: column;
   gap: 20px;
   padding: 24px 18px;
-  background: var(--bg-raised);
-  border-right: 1px solid var(--border);
   overflow-y: auto;
 }
 
@@ -280,7 +286,7 @@ body {
    so the two never read as one block of text. */
 .panel-persona {
   margin-top: 6px;
-  max-width: 94%;
+  max-width: 68ch;
   font-size: 11px;
   line-height: 1.4;
   font-style: italic;
@@ -306,7 +312,7 @@ body {
 
 .panel-strategy {
   margin-top: 2px;
-  max-width: 94%;
+  max-width: 68ch;
   font-size: 11px;
   line-height: 1.4;
   color: var(--fg-muted);
@@ -552,15 +558,22 @@ body {
     grid-template-columns: 1fr;
   }
   .sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-inner {
     position: static;
-    height: auto;
+    min-height: 0;
+    max-height: none;
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
     gap: 12px 28px;
     padding: 14px 16px;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
+    overflow: visible;
+  }
+  .sidebar-spacer {
+    display: none;
   }
   .market {
     border: none;
