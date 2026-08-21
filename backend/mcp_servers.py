@@ -9,6 +9,25 @@ load_dotenv(override=True)
 PROJECT_DIR = str(Path(__file__).resolve().parent.parent)
 TIMEOUT = 120
 
+
+def server(name: str, params: dict, **kwargs) -> MCPServerStdio:
+    """One stdio MCP server, named and with its tool list cached.
+
+    The name is what the trace shows; without it every server reports the
+    command that launched it, and ours all launch with "uv". Caching the tool
+    list matters as much: the SDK otherwise re-lists tools on every turn, which
+    costs a round trip per server per turn and buries the activity log under
+    identical entries. No server here gains or loses tools mid-run.
+    """
+    return MCPServerStdio(
+        params,
+        name=name,
+        cache_tools_list=True,
+        client_session_timeout_seconds=TIMEOUT,
+        **kwargs,
+    )
+
+
 def trader_mcp_servers() -> list[MCPServerStdio]:
     """The trader's MCP servers: our Accounts, Push Notification and Market data servers.
 
@@ -20,12 +39,11 @@ def trader_mcp_servers() -> list[MCPServerStdio]:
     """
     if not massive_api_key:
         raise RuntimeError("MASSIVE_API_KEY is not set; live market data is required to trade")
-    params = [
-        {"command": "uv", "args": ["run", "-m", "backend.accounts_server"], "cwd": PROJECT_DIR},
-        {"command": "uv", "args": ["run", "-m", "backend.push_server"], "cwd": PROJECT_DIR},
-        {"command": "uv", "args": ["run", "-m", "backend.market_server"], "cwd": PROJECT_DIR},
+    return [
+        server("accounts", {"command": "uv", "args": ["run", "-m", "backend.accounts_server"], "cwd": PROJECT_DIR}),
+        server("push", {"command": "uv", "args": ["run", "-m", "backend.push_server"], "cwd": PROJECT_DIR}),
+        server("market", {"command": "uv", "args": ["run", "-m", "backend.market_server"], "cwd": PROJECT_DIR}),
     ]
-    return [MCPServerStdio(p, client_session_timeout_seconds=TIMEOUT) for p in params]
 
 
 def risk_manager_mcp_servers() -> list[MCPServerStdio]:
@@ -34,11 +52,10 @@ def risk_manager_mcp_servers() -> list[MCPServerStdio]:
     The risk manager must be able to inspect balances and holdings but never
     trade or change strategies, so the server is filtered to its read tools.
     """
-    params = {"command": "uv", "args": ["run", "-m", "backend.accounts_server"], "cwd": PROJECT_DIR}
     return [
-        MCPServerStdio(
-            params,
-            client_session_timeout_seconds=TIMEOUT,
+        server(
+            "accounts (read-only)",
+            {"command": "uv", "args": ["run", "-m", "backend.accounts_server"], "cwd": PROJECT_DIR},
             tool_filter=create_static_tool_filter(allowed_tool_names=["get_balance", "get_holdings"]),
         )
     ]
@@ -54,15 +71,13 @@ def researcher_mcp_servers(name: str) -> list[MCPServerStdio]:
     Memory is a per-trader Qdrant collection run in local mode (no server needed);
     fastembed downloads its embedding model on first use.
     """
-    fetch = MCPServerStdio(
-        {"command": "uvx", "args": ["--with", "mcp<2","mcp-server-fetch"]},
-        client_session_timeout_seconds=TIMEOUT,
-    )
-    search = MCPServerStdio(
+    fetch = server("fetch", {"command": "uvx", "args": ["--with", "mcp<2", "mcp-server-fetch"]})
+    search = server(
+        "search",
         {"command": "uv", "args": ["run", "-m", "backend.research_server"], "cwd": PROJECT_DIR},
-        client_session_timeout_seconds=TIMEOUT,
     )
-    memory = MCPServerStdio(
+    memory = server(
+        f"memory ({name.lower()})",
         {
             "command": "uvx",
             "args": ["mcp-server-qdrant"],
@@ -71,6 +86,5 @@ def researcher_mcp_servers(name: str) -> list[MCPServerStdio]:
                 "COLLECTION_NAME": f"{name.lower()}-memories",
             },
         },
-        client_session_timeout_seconds=TIMEOUT,
     )
     return [fetch, search, memory]
