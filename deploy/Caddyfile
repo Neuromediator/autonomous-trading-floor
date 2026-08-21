@@ -1,0 +1,8 @@
+# Replace with your own DuckDNS subdomain. Caddy obtains and renews a
+# Let's Encrypt certificate over HTTP-01, which needs ports 80 and 443 open and
+# the DuckDNS A record pointing at this server — no API token required.
+
+your-subdomain.duckdns.org {
+	encode gzip
+	reverse_proxy 127.0.0.1:8000
+}

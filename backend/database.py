@@ -3,11 +3,15 @@ import sqlite3
 import json
 import time
 from datetime import datetime
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-DB = "accounts.db"
+# Absolute by default: under a service manager the working directory is not the
+# project, and a relative path would quietly create a second, empty database.
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+DB = os.getenv("DB_PATH", str(PROJECT_DIR / "accounts.db"))
 
 
 with sqlite3.connect(DB) as conn:

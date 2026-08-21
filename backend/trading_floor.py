@@ -1,6 +1,8 @@
 from .traders import Trader
 from typing import List
 import asyncio
+import time
+from datetime import datetime, timedelta, timezone
 from .database import prune_old_rows
 from .tracers import LogTracer
 from agents import add_trace_processor, set_trace_processors
@@ -10,6 +12,12 @@ import os
 
 load_dotenv(override=True)
 
+# A daily run is scheduled by wall clock, not by sleeping a fixed span: the
+# sleep started when the previous round *finished*, so each day drifted later by
+# the length of a round and after a few weeks the engine woke to a closed market
+# and never ran again. RUN_AT is UTC ("15:00"); pick a time inside US market
+# hours all year, which run 13:30-20:00 UTC in summer and 14:30-21:00 in winter.
+RUN_AT = os.getenv("RUN_AT", "").strip()
 RUN_EVERY_N_MINUTES = int(os.getenv("RUN_EVERY_N_MINUTES", "60"))
 # Pause between traders within one round: they run one after another, not in
 # parallel, so four agents don't burst through LLM and market-data rate limits.
@@ -53,7 +61,30 @@ def create_traders() -> List[Trader]:
     return traders
 
 
-async def run_every_n_minutes():
+def seconds_until(run_at: str, now: datetime | None = None) -> float:
+    """Seconds until the next occurrence of a UTC HH:MM."""
+    now = now or datetime.now(timezone.utc)
+    hour, minute = (int(part) for part in run_at.split(":"))
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return (target - now).total_seconds()
+
+
+async def run_round(traders: List[Trader]) -> None:
+    """One round: every trader in turn, with a pause so they don't burst limits."""
+    if not (RUN_EVEN_WHEN_MARKET_IS_CLOSED or is_market_open()):
+        print(f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC — market closed, skipping round")
+        return
+    print(f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC — starting round")
+    for i, trader in enumerate(traders):
+        if i:
+            await asyncio.sleep(SECONDS_BETWEEN_TRADERS)
+        await trader.run()
+    print(f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC — round finished")
+
+
+async def run_forever():
     if OPENAI_TRACING:
         add_trace_processor(LogTracer())
     else:
@@ -62,17 +93,27 @@ async def run_every_n_minutes():
     if logs or searches:
         print(f"Pruned {logs} expired log rows and {searches} cached searches")
     traders = create_traders()
+
+    if RUN_AT:
+        while True:
+            wait = seconds_until(RUN_AT)
+            print(f"Next round at {RUN_AT} UTC, in {wait / 3600:.1f} hours")
+            await asyncio.sleep(wait)
+            await run_round(traders)
+        return
+
+    # Interval mode, for testing. The next start is measured from this start,
+    # not from the finish, so rounds keep their place in the day.
+    next_start = time.monotonic()
     while True:
-        if RUN_EVEN_WHEN_MARKET_IS_CLOSED or is_market_open():
-            for i, trader in enumerate(traders):
-                if i:
-                    await asyncio.sleep(SECONDS_BETWEEN_TRADERS)
-                await trader.run()
-        else:
-            print("Market is closed, skipping run")
-        await asyncio.sleep(RUN_EVERY_N_MINUTES * 60)
+        await run_round(traders)
+        next_start += RUN_EVERY_N_MINUTES * 60
+        await asyncio.sleep(max(0.0, next_start - time.monotonic()))
 
 
 if __name__ == "__main__":
-    print(f"Starting scheduler to run every {RUN_EVERY_N_MINUTES} minutes")
-    asyncio.run(run_every_n_minutes())
+    if RUN_AT:
+        print(f"Starting scheduler: one round a trading day at {RUN_AT} UTC")
+    else:
+        print(f"Starting scheduler: a round every {RUN_EVERY_N_MINUTES} minutes")
+    asyncio.run(run_forever())

@@ -52,7 +52,9 @@ cd frontend && npm run dev
 uv run -m backend.trading_floor
 ```
 
-Interactive API docs at http://localhost:8000/docs. The engine runs a round every `RUN_EVERY_N_MINUTES` during market hours (set `1440` for once a day), with `SECONDS_BETWEEN_TRADERS` between traders inside a round — keep an eye on your LLM API usage.
+Interactive API docs at http://localhost:8000/docs. In production set `RUN_AT` (UTC) to run one round a trading day; without it the engine falls back to a round every `RUN_EVERY_N_MINUTES`, which is for testing. `SECONDS_BETWEEN_TRADERS` spaces the traders inside a round — keep an eye on your LLM API usage.
+
+To put it on a server, see [DEPLOY.md](DEPLOY.md): the API serves the built dashboard itself, so one process answers both the page and the JSON.
 
 Reset all traders to their starting strategies with `uv run -m backend.reset`.
 

@@ -1,0 +1,23 @@
+# The engine: runs one trading round a day and writes the database the API
+# reads. Both units must run on the same host — they share accounts.db as a
+# file, not over the network.
+
+[Unit]
+Description=Autonomous Trading Floor - trading engine
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=trader
+WorkingDirectory=/opt/trading-floor
+EnvironmentFile=/opt/trading-floor/.env
+ExecStart=/home/trader/.local/bin/uv run -m backend.trading_floor
+# A round spawns seven MCP subprocesses; give them time to shut down cleanly.
+TimeoutStopSec=60
+KillMode=mixed
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

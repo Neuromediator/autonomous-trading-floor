@@ -1,0 +1,19 @@
+# The dashboard: serves the built frontend and the read-only JSON API.
+# Install to /etc/systemd/system/ and adjust User and WorkingDirectory.
+
+[Unit]
+Description=Autonomous Trading Floor - dashboard API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=trader
+WorkingDirectory=/opt/trading-floor
+EnvironmentFile=/opt/trading-floor/.env
+ExecStart=/home/trader/.local/bin/uv run uvicorn backend.api:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

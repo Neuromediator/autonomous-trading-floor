@@ -9,7 +9,10 @@ Run it from the 6_mcp directory so it shares the engine's accounts.db:
     uv run uvicorn backend.api:app --port 8000
 """
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 
 from backend import market
 from backend.accounts import Account
@@ -161,3 +164,10 @@ def get_trader_strategies(name: str) -> list[dict]:
     """Every strategy the trader has written, oldest first."""
     require_trader(name)
     return [{"datetime": ts, "strategy": strategy} for ts, strategy in read_strategies(name)]
+
+
+# The built dashboard, mounted last so every /api route above wins the match.
+# Same origin as the JSON it fetches, so there is no CORS in production either.
+FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if FRONTEND_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
