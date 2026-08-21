@@ -1,6 +1,7 @@
 from .traders import Trader
 from typing import List
 import asyncio
+from .database import prune_old_rows
 from .tracers import LogTracer
 from agents import add_trace_processor, set_trace_processors
 from .market import is_market_open
@@ -57,6 +58,9 @@ async def run_every_n_minutes():
         add_trace_processor(LogTracer())
     else:
         set_trace_processors([LogTracer()])
+    logs, searches = prune_old_rows()
+    if logs or searches:
+        print(f"Pruned {logs} expired log rows and {searches} cached searches")
     traders = create_traders()
     while True:
         if RUN_EVEN_WHEN_MARKET_IS_CLOSED or is_market_open():

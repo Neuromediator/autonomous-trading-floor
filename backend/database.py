@@ -1,5 +1,7 @@
+import os
 import sqlite3
 import json
+import time
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -48,6 +50,9 @@ with sqlite3.connect(DB) as conn:
             strategy TEXT
         )
     ''')
+    # The dashboard polls the log for every trader every few seconds; without
+    # this the query is a full table scan plus a sort, which grows with history.
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_logs_name_datetime ON logs (name, datetime)')
     conn.commit()
 
 def write_account(name, account_dict):
@@ -124,6 +129,35 @@ def read_strategies(name: str):
             SELECT datetime, strategy FROM strategies WHERE name = ? ORDER BY id
         ''', (name.lower(),))
         return cursor.fetchall()
+
+# Retention, applied once when the engine starts. Traces are noise after a few
+# months and cached searches are useless past their TTL, but the accounts,
+# strategies and per-trader memory are the record of the experiment and are
+# never pruned. Set either to 0 to keep everything.
+LOG_RETENTION_DAYS = int(os.getenv("LOG_RETENTION_DAYS", "90"))
+SEARCH_RETENTION_DAYS = int(os.getenv("SEARCH_RETENTION_DAYS", "7"))
+
+
+def prune_old_rows() -> tuple[int, int]:
+    """Drop expired trace logs and cached searches. Returns how many of each."""
+    with sqlite3.connect(DB) as conn:
+        cursor = conn.cursor()
+        logs = searches = 0
+        if LOG_RETENTION_DAYS > 0:
+            cursor.execute(
+                "DELETE FROM logs WHERE datetime < datetime('now', ?)",
+                (f"-{LOG_RETENTION_DAYS} days",),
+            )
+            logs = cursor.rowcount
+        if SEARCH_RETENTION_DAYS > 0:
+            cursor.execute(
+                "DELETE FROM searches WHERE fetched_at < ?",
+                (time.time() - SEARCH_RETENTION_DAYS * 86400,),
+            )
+            searches = cursor.rowcount
+        conn.commit()
+        return logs, searches
+
 
 def write_log(name: str, type: str, message: str):
     """
