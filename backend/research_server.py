@@ -49,6 +49,12 @@ def normalise(query: str) -> str:
     return " ".join(query.lower().split())
 
 
+def describe_age(seconds: float) -> str:
+    if seconds < 3600:
+        return f"{max(1, round(seconds / 60))} minutes"
+    return f"{round(seconds / 3600)} hours"
+
+
 async def fetch_search(query: str) -> str:
     """Ask Tavily, and format the answer compactly."""
     async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
@@ -88,10 +94,16 @@ async def run_search(query: str) -> str:
         return cached[0]
 
     if searches_spent >= MAX_SEARCHES_PER_RUN:
-        # A stale answer still beats none; otherwise say so plainly, so the
-        # agent reasons with what it has instead of retrying.
+        # A stale answer still beats none, but say how old it is: past the TTL
+        # this is the one path that serves an answer of any age, and the agent
+        # should weigh it accordingly instead of treating it as current.
         if cached:
-            return cached[0]
+            age = describe_age(time.time() - cached[1])
+            return (
+                f"[Cached {age} ago. This run's search budget is spent, so it "
+                f"could not be refreshed — treat it as possibly out of date.]\n\n"
+                f"{cached[0]}"
+            )
         return (
             "This run's search budget is spent. Draw conclusions from what you "
             "already found and from your memory instead of searching again."

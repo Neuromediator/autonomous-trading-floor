@@ -56,8 +56,16 @@ async def test_exhausted_budget_says_so(search_store, calls, monkeypatch):
 
 async def test_exhausted_budget_still_serves_a_stale_answer(search_store, calls, monkeypatch):
     monkeypatch.setattr(research, "MAX_SEARCHES_PER_RUN", 0)
-    search_store["gold"] = ("old news", time.time() - research.SEARCH_CACHE_TTL_SECONDS - 1)
-    assert await research.run_search("gold") == "old news"
+    search_store["gold"] = ("old news", time.time() - 9 * 3600)
+    answer = await research.run_search("gold")
+    assert answer.endswith("old news")
+    # The agent is told how old it is, since this path ignores the TTL.
+    assert answer.startswith("[Cached 9 hours ago.")
+
+
+async def test_fresh_cache_hit_carries_no_prefix(search_store, calls):
+    await research.run_search("gold")
+    assert await research.run_search("gold") == "results for gold"
 
 
 async def test_cached_hits_do_not_spend_budget(search_store, calls, monkeypatch):
