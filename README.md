@@ -4,9 +4,7 @@ An equity trading simulation where four autonomous LLM agents manage virtual por
 
 > **Not a real trading tool.** This is a learning project about agentic AI architecture. Do not use it for actual trading decisions.
 
-<!-- TODO: record the dashboard and drop the file in docs/dashboard.gif, then uncomment:
-![Dashboard](docs/dashboard.gif)
--->
+![The dashboard during a trading round](docs/demo.gif)
 
 ## How it works
 

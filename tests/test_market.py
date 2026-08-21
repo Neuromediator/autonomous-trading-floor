@@ -112,3 +112,21 @@ def test_missing_key_raises(price_store, monkeypatch):
     monkeypatch.setattr(market, "massive_api_key", None)
     with pytest.raises(RuntimeError, match="MASSIVE_API_KEY"):
         market.get_share_price("AAPL")
+
+
+def test_tier_probe_remembers_success_but_not_failure(monkeypatch):
+    """A rate-limited probe must not label the dashboard unavailable for good."""
+    monkeypatch.setattr(market, "massive_api_key", "test-key")
+    monkeypatch.setattr(market, "_tier_label", None)
+    monkeypatch.setattr(market, "RESTClient", lambda key: object())
+
+    def rate_limited(client, symbol):
+        raise RuntimeError("HTTP 429 Too Many Requests")
+
+    monkeypatch.setattr(market, "price_methods", [rate_limited])
+    assert market.price_tier_label() == "unavailable"
+    assert market._tier_label is None
+
+    monkeypatch.setattr(market, "price_methods", [lambda client, symbol: 100.0])
+    assert market.price_tier_label() == "last trade"
+    assert market._tier_label == "last trade"
