@@ -60,3 +60,16 @@ def test_portfolio_value_with_signed_holdings(env):
     account.sell_shares("MSFT", 5, "short")
     expected = account.balance + 5 * 100.0 - 5 * 100.0
     assert account.calculate_portfolio_value() == pytest.approx(expected)
+
+
+def test_trades_are_labelled_by_what_they_do_to_the_position(env):
+    """A sale can trim a long or open a short; a purchase can cover a short."""
+    from backend.api import classify_trades
+
+    account = Account.get("testy")
+    account.buy_shares("AAPL", 4, "long")
+    account.sell_shares("AAPL", 2, "trim")
+    account.sell_shares("MSFT", 3, "short it")
+    account.buy_shares("MSFT", 3, "cover")
+
+    assert [t["action"] for t in classify_trades(account)] == ["BUY", "SELL", "SHORT", "COVER"]

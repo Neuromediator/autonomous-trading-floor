@@ -66,6 +66,36 @@ async function pollData(): Promise<void> {
   );
   markLeader();
   renderReturns();
+  renderShorts();
+}
+
+function renderShorts(): void {
+  const block = document.getElementById("shorts")!;
+  const list = document.getElementById("shorts-list")!;
+  const rows = [...states.values()]
+    .map((s) => s.detail)
+    .filter((d): d is NonNullable<typeof d> => d !== null && d.short_exposure > 0)
+    .sort((a, b) => b.short_exposure - a.short_exposure);
+
+  // Nothing to say when the whole floor is long; the block disappears.
+  block.hidden = rows.length === 0;
+  if (rows.length === 0) return;
+
+  list.innerHTML = "";
+  for (const d of rows) {
+    const li = document.createElement("li");
+    li.className = "shorts-row";
+    const name = document.createElement("span");
+    name.className = "shorts-name";
+    name.textContent = d.name;
+    const pct = document.createElement("span");
+    pct.className = "shorts-pct";
+    pct.textContent = `${(d.short_exposure * 100).toFixed(1)}%`;
+    li.append(name, pct);
+    list.append(li);
+  }
+  const limit = rows[0].max_short_exposure * 100;
+  document.getElementById("shorts-limit")!.textContent = `Limit ${limit.toFixed(0)}% of portfolio`;
 }
 
 function renderReturns(): void {

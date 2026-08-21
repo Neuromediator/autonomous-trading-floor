@@ -16,12 +16,17 @@ export interface Holding {
   unrealized_pnl: number;
 }
 
+/** What the trade did to the position, not just its sign: a sale can reduce a
+ *  long or open a short, and a purchase can open a long or cover a short. */
+export type TradeAction = "BUY" | "SELL" | "SHORT" | "COVER";
+
 export interface Transaction {
   symbol: string;
   quantity: number;
   price: number;
   timestamp: string;
   rationale: string;
+  action: TradeAction;
 }
 
 export interface TimePoint {
@@ -41,6 +46,9 @@ export interface TraderDetail extends TraderInfo {
   pnl: number;
   holdings: Holding[];
   transactions: Transaction[];
+  /** Short market value as a share of the portfolio, and the hard limit on it. */
+  short_exposure: number;
+  max_short_exposure: number;
   time_series: TimePoint[];
 }
 

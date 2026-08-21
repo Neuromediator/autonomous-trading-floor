@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException
 from backend import market
 from backend.accounts import Account
 from backend.database import read_log, read_strategies
+from backend.risk import MAX_SHORT_EXPOSURE
 from backend.templates import persona
 from backend.trading_floor import names, lastnames, short_model_names
 
@@ -46,6 +47,34 @@ def average_cost(account: Account, symbol: str, quantity: int) -> float:
     spend = sum(t.price * abs(t.quantity) for t in same_side)
     shares = sum(abs(t.quantity) for t in same_side)
     return spend / shares if shares else 0.0
+
+
+def classify_trades(account: Account) -> list[dict]:
+    """Every trade, labelled by what it did to the position.
+
+    A negative quantity alone doesn't say whether the trader sold something it
+    held or sold short, and once a short is covered nothing in the history shows
+    it ever existed. Replaying the position per symbol recovers that: the label
+    is the difference between reducing a long and opening a short.
+    """
+    position: dict[str, int] = {}
+    trades = []
+    for t in account.transactions:
+        before = position.get(t.symbol, 0)
+        after = before + t.quantity
+        position[t.symbol] = after
+        if t.quantity > 0:
+            action = "COVER" if before < 0 else "BUY"
+        else:
+            action = "SHORT" if after < 0 else "SELL"
+        trades.append({**t.model_dump(), "action": action})
+    return trades
+
+
+def short_exposure(account: Account, holdings: list[dict], portfolio_value: float) -> float:
+    """Short market value as a share of the portfolio, against MAX_SHORT_EXPOSURE."""
+    shorts = sum(-h["market_value"] for h in holdings if h["quantity"] < 0)
+    return shorts / portfolio_value if portfolio_value > 0 else 0.0
 
 
 def holdings_detail(account: Account) -> list[dict]:
@@ -109,7 +138,9 @@ def get_trader(name: str) -> dict:
         "portfolio_value": portfolio_value,
         "pnl": account.calculate_profit_loss(portfolio_value),
         "holdings": holdings,
-        "transactions": account.list_transactions(),
+        "transactions": classify_trades(account),
+        "short_exposure": short_exposure(account, holdings, portfolio_value),
+        "max_short_exposure": MAX_SHORT_EXPOSURE,
         "time_series": [{"datetime": ts, "value": value} for ts, value in account.portfolio_value_time_series],
     }
 

@@ -184,6 +184,45 @@ body {
 .returns-pct[data-trend="up"] { color: var(--trend-up); }
 .returns-pct[data-trend="down"] { color: var(--trend-down); }
 
+/* Short exposure against the hard limit, so the guardrail is visible without
+   hovering a heatmap tile. Hidden entirely when nobody is short. */
+.shorts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.shorts-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--fg-dim);
+}
+.shorts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.shorts-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+.shorts-name { color: var(--fg); }
+.shorts-pct {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--purple);
+}
+.shorts-limit {
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
 .sidebar-spacer { flex: 1; }
 
 .theme-toggle {
@@ -545,6 +584,10 @@ body {
 }
 .txn-side[data-side="buy"] { color: var(--trend-up); }
 .txn-side[data-side="sell"] { color: var(--trend-down); }
+/* Shorting and covering get their own colour: they are the mechanic worth
+   spotting, and a plain SELL badge hid them among ordinary trims. */
+.txn-side[data-side="short"] { color: var(--purple); }
+.txn-side[data-side="cover"] { color: var(--blue); }
 .txn-detail {
   flex: 1;
   min-width: 0;

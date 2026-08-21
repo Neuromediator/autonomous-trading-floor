@@ -46,8 +46,8 @@ export class TransactionsView {
 
       const side = document.createElement("span");
       side.className = "txn-side";
-      side.dataset.side = t.quantity >= 0 ? "buy" : "sell";
-      side.textContent = t.quantity >= 0 ? "BUY" : "SELL";
+      side.dataset.side = t.action.toLowerCase();
+      side.textContent = t.action;
 
       const detail = document.createElement("span");
       detail.className = "txn-detail";
