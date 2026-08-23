@@ -9,6 +9,7 @@ Run it from the 6_mcp directory so it shares the engine's accounts.db:
     uv run uvicorn backend.api:app --port 8000
 """
 
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -171,3 +172,11 @@ def get_trader_strategies(name: str) -> list[dict]:
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 if FRONTEND_DIST.is_dir():
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
+else:
+    # Say so: a failed or forgotten build otherwise shows up only as a 404 at
+    # the root, with the API answering normally and nothing in the log.
+    logging.getLogger(__name__).warning(
+        "No built dashboard at %s — / will return 404. Build it with: "
+        "cd frontend && npm ci && npm run build",
+        FRONTEND_DIST,
+    )

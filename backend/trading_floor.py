@@ -2,6 +2,7 @@ from .traders import Trader
 from typing import List
 import asyncio
 import time
+import traceback
 from datetime import datetime, timedelta, timezone
 from .database import prune_old_rows
 from .tracers import LogTracer
@@ -19,6 +20,8 @@ load_dotenv(override=True)
 # hours all year, which run 13:30-20:00 UTC in summer and 14:30-21:00 in winter.
 RUN_AT = os.getenv("RUN_AT", "").strip()
 RUN_EVERY_N_MINUTES = int(os.getenv("RUN_EVERY_N_MINUTES", "60"))
+if RUN_EVERY_N_MINUTES <= 0:
+    raise ValueError(f"RUN_EVERY_N_MINUTES must be a positive number of minutes, got {RUN_EVERY_N_MINUTES}")
 # Pause between traders within one round: they run one after another, not in
 # parallel, so four agents don't burst through LLM and market-data rate limits.
 SECONDS_BETWEEN_TRADERS = int(os.getenv("SECONDS_BETWEEN_TRADERS", "60"))
@@ -61,10 +64,27 @@ def create_traders() -> List[Trader]:
     return traders
 
 
+def parse_run_at(run_at: str) -> tuple[int, int]:
+    """Parse a UTC "HH:MM" into (hour, minute), rejecting anything else.
+
+    Called once at import so a typo fails immediately with a readable message.
+    Left to the scheduler it raised hours later, deep in the run loop, and
+    systemd's Restart=always turned that into the same stack trace every
+    RestartSec with nothing saying which variable was wrong.
+    """
+    parts = run_at.split(":")
+    if len(parts) != 2 or not all(part.isdigit() for part in parts):
+        raise ValueError(f'RUN_AT must be a UTC "HH:MM" time, got {run_at!r}')
+    hour, minute = int(parts[0]), int(parts[1])
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ValueError(f'RUN_AT must be a UTC "HH:MM" time, got {run_at!r}')
+    return hour, minute
+
+
 def seconds_until(run_at: str, now: datetime | None = None) -> float:
     """Seconds until the next occurrence of a UTC HH:MM."""
     now = now or datetime.now(timezone.utc)
-    hour, minute = (int(part) for part in run_at.split(":"))
+    hour, minute = parse_run_at(run_at)
     target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if target <= now:
         target += timedelta(days=1)
@@ -84,6 +104,24 @@ async def run_round(traders: List[Trader]) -> None:
     print(f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC — round finished")
 
 
+async def run_round_safely(traders: List[Trader]) -> None:
+    """run_round, but a failure costs one round instead of the process.
+
+    An unhandled exception — a network blip, a refused LLM call, an MCP
+    subprocess that died — used to propagate out of run_forever and end the
+    process. systemd then restarted it, which in RUN_AT mode skipped to
+    tomorrow's slot and lost the day, and in interval mode started a whole new
+    round every RestartSec.
+    """
+    try:
+        await run_round(traders)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        print(f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC — round failed, waiting for the next one:")
+        traceback.print_exc()
+
+
 async def run_forever():
     if OPENAI_TRACING:
         add_trace_processor(LogTracer())
@@ -99,21 +137,34 @@ async def run_forever():
             wait = seconds_until(RUN_AT)
             print(f"Next round at {RUN_AT} UTC, in {wait / 3600:.1f} hours")
             await asyncio.sleep(wait)
-            await run_round(traders)
-        return
+            await run_round_safely(traders)
 
     # Interval mode, for testing. The next start is measured from this start,
     # not from the finish, so rounds keep their place in the day.
+    period = RUN_EVERY_N_MINUTES * 60
     next_start = time.monotonic()
     while True:
-        await run_round(traders)
-        next_start += RUN_EVERY_N_MINUTES * 60
-        await asyncio.sleep(max(0.0, next_start - time.monotonic()))
+        await run_round_safely(traders)
+        # A round can outrun its slot: four agents with a pause between them
+        # take well over an hour. Skip the slots that went by instead of
+        # firing rounds back to back until the schedule catches up.
+        next_start += period
+        now = time.monotonic()
+        if next_start <= now:
+            skipped = int((now - next_start) // period) + 1
+            next_start += skipped * period
+            print(f"Round overran its slot; skipping {skipped} scheduled {'round' if skipped == 1 else 'rounds'}")
+        await asyncio.sleep(next_start - now)
+
+
+# Fail at import, not hours later inside the scheduler.
+if RUN_AT:
+    parse_run_at(RUN_AT)
 
 
 if __name__ == "__main__":
     if RUN_AT:
-        print(f"Starting scheduler: one round a trading day at {RUN_AT} UTC")
+        print(f"Starting scheduler: one round a day at {RUN_AT} UTC")
     else:
         print(f"Starting scheduler: a round every {RUN_EVERY_N_MINUTES} minutes")
     asyncio.run(run_forever())
