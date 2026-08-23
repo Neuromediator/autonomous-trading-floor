@@ -16,9 +16,22 @@ taste, in the units as well as here.
 
 ## 1. Create the server
 
-Any provider will do. Hetzner's CX22 (2 vCPU, 4 GB, 40 GB, about €4.50 a month)
-is more than enough. Choose Ubuntu 24.04 and add your SSH key during creation.
-Write down the IPv4 address it gives you.
+Any provider will do. Hetzner's CX23 (2 vCPU, 4 GB, 40 GB) is more than enough.
+Check the current price rather than trusting a number written here — Hetzner
+repriced its whole cloud range in June 2026, and the CX22 this guide used to
+name no longer exists. As of August 2026 a CX23 in Helsinki is €5.49 a month
+net, a primary IPv4 adds €0.50, and automatic backups add 20% of the server
+price.
+
+Choose Ubuntu 24.04 and add your SSH key during creation. Write down the IPv4
+address it gives you. With the [hcloud CLI](https://github.com/hetznercloud/cli)
+that whole step is:
+
+```bash
+# on your own machine, after hcloud context create
+hcloud server create --name trading-floor --type cx23 --image ubuntu-24.04 \
+  --location hel1 --ssh-key YOUR_KEY_NAME --enable-backup
+```
 
 ## 2. Point the subdomain at it
 

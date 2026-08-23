@@ -15,6 +15,10 @@ EnvironmentFile=/opt/trading-floor/.env
 # ExecStart below would still start, but the MCP servers are spawned as bare
 # "uv" and "uvx" and would fail at the first round.
 Environment=PATH=/home/trader/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Without this Python block-buffers stdout when it is a pipe, and the lines
+# saying when a round starts and finishes sit in the buffer instead of
+# reaching journalctl.
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/home/trader/.local/bin/uv run uvicorn backend.api:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=5
