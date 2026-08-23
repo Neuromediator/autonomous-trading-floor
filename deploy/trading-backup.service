@@ -1,0 +1,10 @@
+# One backup run. Started by trading-backup.timer, not enabled on its own.
+
+[Unit]
+Description=Autonomous Trading Floor - database backup
+
+[Service]
+Type=oneshot
+User=trader
+WorkingDirectory=/opt/trading-floor
+ExecStart=/opt/trading-floor/deploy/backup.sh

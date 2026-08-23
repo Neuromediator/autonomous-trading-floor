@@ -76,17 +76,23 @@ nano .env
 chmod 600 .env
 ```
 
-Fill in the API keys, and for an unattended run set:
+Fill in the four keys at the top — `OPENAI_API_KEY`, `OPENROUTER_API_KEY`,
+`MASSIVE_API_KEY`, `TAVILY_API_KEY`. The rest of the file already carries the
+production schedule:
 
 ```
 RUN_AT=15:00
-RUN_EVEN_WHEN_MARKET_IS_CLOSED=false
+RUN_EVEN_WHEN_MARKET_IS_CLOSED=true
 ```
 
-`RUN_AT` is UTC and gives one round a trading day. US market hours are
-13:30–20:00 UTC in summer and 14:30–21:00 in winter, so a time between 15:00 and
-19:00 stays inside the window all year. Leave `RUN_AT` empty and the engine
-falls back to interval mode, which is for testing.
+`RUN_AT` is UTC and gives one round a day. US market hours are 13:30–20:00 UTC
+in summer and 14:30–21:00 in winter, so a time between 15:00 and 19:00 stays
+inside the window all year. `RUN_EVEN_WHEN_MARKET_IS_CLOSED=true` keeps the
+round running on weekends and holidays instead of skipping it.
+
+Everything else in `.env.example` is commented out and defaulted. Uncomment a
+line to change it, but do not leave a variable set to an empty value — an empty
+string overrides the default rather than falling back to it.
 
 Check it runs before handing it to systemd:
 
@@ -142,15 +148,31 @@ itself is at the root of the same host.
 
 ## Backups
 
-The database is the experiment's only record and nothing recreates it. A daily
-copy is enough:
+The database is the experiment's only record and nothing recreates it, so the
+backup runs on a timer rather than by hand. `deploy/backup.sh` writes a dated
+`sqlite3 .backup` snapshot plus a tarball of the agents' `memory/` into
+`/var/backups/trading-floor` and keeps the last 14 days:
 
 ```bash
-sqlite3 /opt/trading-floor/accounts.db ".backup /opt/trading-floor/backup.db"
+# as root
+install -d -o trader -g trader /var/backups/trading-floor
+cp /opt/trading-floor/deploy/trading-backup.service \
+   /opt/trading-floor/deploy/trading-backup.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now trading-backup.timer
 ```
 
-The agents' Qdrant memory lives in `memory/` and is equally unrecoverable; copy
-it with the same cadence if the run matters.
+The timer fires at 23:00 UTC, hours after a 15:00 round; move it if you move
+`RUN_AT`. Check it with `systemctl list-timers trading-backup` and force a run
+with `systemctl start trading-backup`.
+
+This protects against a bad round or a wrong `sqlite3` command, not against
+losing the disk — the copies sit on the same volume as the original. If the run
+matters, pull them off the box as well, e.g. from your own machine:
+
+```bash
+rsync -az trader@YOUR_SERVER_IP:/var/backups/trading-floor/ ./backups/
+```
 
 ## Updating
 

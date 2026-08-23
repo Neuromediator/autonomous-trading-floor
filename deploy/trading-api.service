@@ -11,6 +11,10 @@ Type=exec
 User=trader
 WorkingDirectory=/opt/trading-floor
 EnvironmentFile=/opt/trading-floor/.env
+# systemd does not read ~/.profile, so uv would not be on PATH. The absolute
+# ExecStart below would still start, but the MCP servers are spawned as bare
+# "uv" and "uvx" and would fail at the first round.
+Environment=PATH=/home/trader/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/home/trader/.local/bin/uv run uvicorn backend.api:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=5

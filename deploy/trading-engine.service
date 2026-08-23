@@ -4,14 +4,22 @@
 
 [Unit]
 Description=Autonomous Trading Floor - trading engine
-After=network-online.target
-Wants=network-online.target
+# time-sync too: the wall-clock scheduler computes the first RUN_AT the moment
+# it starts, and a clock still being corrected by chrony would put that first
+# round in the wrong place — the sleep is monotonic, so a later step does not
+# move it.
+After=network-online.target time-sync.target
+Wants=network-online.target time-sync.target
 
 [Service]
 Type=exec
 User=trader
 WorkingDirectory=/opt/trading-floor
 EnvironmentFile=/opt/trading-floor/.env
+# systemd does not read ~/.profile, so uv would not be on PATH. The absolute
+# ExecStart below would still start, but the MCP servers are spawned as bare
+# "uv" and "uvx" and would fail at the first round.
+Environment=PATH=/home/trader/.local/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/home/trader/.local/bin/uv run -m backend.trading_floor
 # A round spawns seven MCP subprocesses; give them time to shut down cleanly.
 TimeoutStopSec=60

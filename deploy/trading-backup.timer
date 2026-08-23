@@ -1,0 +1,13 @@
+# A daily backup, well clear of the trading round. With RUN_AT=15:00 UTC a
+# round is finished long before this; move the time if you move RUN_AT.
+
+[Unit]
+Description=Daily backup of the trading floor database
+
+[Timer]
+OnCalendar=*-*-* 23:00:00 UTC
+# Catch up after a reboot or a shutdown that spanned the scheduled time.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
