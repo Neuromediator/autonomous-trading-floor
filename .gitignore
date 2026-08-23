@@ -1,9 +1,13 @@
 # Secrets
 .env
 
-# Databases and agent memory
+# Databases and agent memory. SQLite keeps sidecar files next to the database —
+# -journal in rollback mode, -wal and -shm in WAL — and they hold pages of the
+# live data, so they must be ignored as carefully as the database itself.
 *.db
-accounts.db
+*.db-journal
+*.db-wal
+*.db-shm
 memory/
 
 # Python

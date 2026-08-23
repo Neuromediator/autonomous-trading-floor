@@ -32,7 +32,7 @@ Key mechanics:
 
 ## Running it
 
-Requires Python 3.12+ with [uv](https://docs.astral.sh/uv/), and Node for the frontend. Copy `.env.example` to `.env` and fill in your keys — `MASSIVE_API_KEY` (the free tier is enough), `TAVILY_API_KEY`, and the LLM keys for the models you enable (see the comments in `.env.example`). Push notifications are off by default; set `PUSH_NOTIFICATIONS=true` with Pushover keys to receive them.
+Requires Python 3.12+ with [uv](https://docs.astral.sh/uv/), and Node for the frontend. Copy `.env.example` to `.env` and fill in the four required keys — `OPENAI_API_KEY` and `OPENROUTER_API_KEY` for the models, `MASSIVE_API_KEY` for market data (the free tier is enough) and `TAVILY_API_KEY` for search. Everything else is commented out with its default; the file is shaped for production, so comment `RUN_AT` out to run rounds on an interval locally. Push notifications are off by default; set `PUSH_NOTIFICATIONS=true` with Pushover keys to receive them.
 
 ```bash
 uv sync
@@ -52,7 +52,7 @@ cd frontend && npm run dev
 uv run -m backend.trading_floor
 ```
 
-Interactive API docs at http://localhost:8000/docs. In production set `RUN_AT` (UTC) to run one round a trading day; without it the engine falls back to a round every `RUN_EVERY_N_MINUTES`, which is for testing. `SECONDS_BETWEEN_TRADERS` spaces the traders inside a round — keep an eye on your LLM API usage.
+Interactive API docs at http://localhost:8000/docs. `RUN_AT` (UTC) gives one round a day and is what `.env.example` ships; comment it out and the engine falls back to a round every `RUN_EVERY_N_MINUTES`, which is for testing. `SECONDS_BETWEEN_TRADERS` spaces the traders inside a round — keep an eye on your LLM API usage.
 
 To put it on a server, see [DEPLOY.md](DEPLOY.md): the API serves the built dashboard itself, so one process answers both the page and the JSON.
 
