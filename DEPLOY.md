@@ -75,6 +75,12 @@ git clone https://github.com/Neuromediator/autonomous-trading-floor /opt/trading
 cd /opt/trading-floor
 uv sync
 cd frontend && npm ci && npm run build && cd ..
+
+# Warm the researcher's fetch server. It pulls in readabilipy, which runs
+# "npm install" for its JavaScript reader the first time it is used — and
+# writes npm's output to stdout, which for an MCP stdio server is the JSON-RPC
+# channel itself. Doing it here keeps that noise out of a live trading round.
+uvx --with "mcp<2" mcp-server-fetch --help >/dev/null 2>&1 || true
 ```
 
 The build lands in `frontend/dist`, which the API serves itself — there is no
