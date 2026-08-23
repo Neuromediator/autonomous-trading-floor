@@ -11,11 +11,29 @@ load_dotenv(override=True)
 # Absolute by default: under a service manager the working directory is not the
 # project, and a relative path would quietly create a second, empty database.
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-DB = os.getenv("DB_PATH", str(PROJECT_DIR / "accounts.db"))
+# "or", not a getenv default: DB_PATH set to an empty string still reaches the
+# environment (from .env, or from systemd's EnvironmentFile), and sqlite3 reads
+# "" as a private temporary database that is discarded when the connection
+# closes — every write would vanish without an error anywhere.
+DB = os.getenv("DB_PATH") or str(PROJECT_DIR / "accounts.db")
+
+# The engine, the API and seven MCP subprocesses all open this file, and each
+# call below opens a connection of its own. Five seconds of contention is not
+# enough when a round writes trace logs continuously for minutes.
+CONNECT_TIMEOUT = 30
 
 
-with sqlite3.connect(DB) as conn:
+def connect() -> sqlite3.Connection:
+    return sqlite3.connect(DB, timeout=CONNECT_TIMEOUT)
+
+
+with connect() as conn:
     cursor = conn.cursor()
+    # WAL so the dashboard's polling can read while a round is writing. Under
+    # the default rollback journal a writer takes the whole file and readers got
+    # "database is locked" for the length of the round. The setting is stored in
+    # the database file, so every later connection inherits it.
+    cursor.execute('PRAGMA journal_mode=WAL')
     cursor.execute('CREATE TABLE IF NOT EXISTS accounts (name TEXT PRIMARY KEY, account TEXT)')
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS logs (
@@ -61,7 +79,7 @@ with sqlite3.connect(DB) as conn:
 
 def write_account(name, account_dict):
     json_data = json.dumps(account_dict)
-    with sqlite3.connect(DB) as conn:
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO accounts (name, account)
@@ -71,7 +89,7 @@ def write_account(name, account_dict):
         conn.commit()
 
 def read_account(name):
-    with sqlite3.connect(DB) as conn:
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT account FROM accounts WHERE name = ?', (name.lower(),))
         row = cursor.fetchone()
@@ -79,7 +97,7 @@ def read_account(name):
     
 def write_price(symbol: str, price: float, fetched_at: float):
     """Store the latest known price for a symbol, with its unix fetch time."""
-    with sqlite3.connect(DB) as conn:
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO prices (symbol, price, fetched_at)
@@ -90,7 +108,7 @@ def write_price(symbol: str, price: float, fetched_at: float):
 
 def read_price(symbol: str):
     """Return (price, fetched_at) for a symbol, or None if never seen."""
-    with sqlite3.connect(DB) as conn:
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT price, fetched_at FROM prices WHERE symbol = ?', (symbol.upper(),))
         row = cursor.fetchone()
@@ -98,7 +116,7 @@ def read_price(symbol: str):
 
 def write_search(query: str, response: str, fetched_at: float):
     """Store a search response under its normalised query."""
-    with sqlite3.connect(DB) as conn:
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO searches (query, response, fetched_at)
@@ -109,7 +127,7 @@ def write_search(query: str, response: str, fetched_at: float):
 
 def read_search(query: str):
     """Return (response, fetched_at) for a query, or None if never searched."""
-    with sqlite3.connect(DB) as conn:
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT response, fetched_at FROM searches WHERE query = ?', (query,))
         row = cursor.fetchone()
@@ -117,7 +135,7 @@ def read_search(query: str):
 
 def write_strategy(name: str, strategy: str):
     """Append a strategy revision for a trader."""
-    with sqlite3.connect(DB) as conn:
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO strategies (name, datetime, strategy)
@@ -127,7 +145,7 @@ def write_strategy(name: str, strategy: str):
 
 def read_strategies(name: str):
     """Every strategy revision for a trader, oldest first."""
-    with sqlite3.connect(DB) as conn:
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute('''
             SELECT datetime, strategy FROM strategies WHERE name = ? ORDER BY id
@@ -144,7 +162,7 @@ SEARCH_RETENTION_DAYS = int(os.getenv("SEARCH_RETENTION_DAYS", "7"))
 
 def prune_old_rows() -> tuple[int, int]:
     """Drop expired trace logs and cached searches. Returns how many of each."""
-    with sqlite3.connect(DB) as conn:
+    with connect() as conn:
         cursor = conn.cursor()
         logs = searches = 0
         if LOG_RETENTION_DAYS > 0:
@@ -174,7 +192,7 @@ def write_log(name: str, type: str, message: str):
     """
     now = datetime.now().isoformat()
     
-    with sqlite3.connect(DB) as conn:
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO logs (name, datetime, type, message)
@@ -193,7 +211,7 @@ def read_log(name: str, last_n=10):
     Returns:
         list: A list of tuples containing (datetime, type, message)
     """
-    with sqlite3.connect(DB) as conn:
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute('''
             SELECT datetime, type, message FROM logs 
