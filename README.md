@@ -28,6 +28,7 @@ Key mechanics:
 - **Self-improving strategies.** Each trader's strategy is plain text stored with its account. The prompts ask the trader to review how its trades actually performed and rewrite the strategy accordingly — a real feedback loop from portfolio returns into future behavior.
 - **Persistent memory.** The researcher stores findings in a per-trader Qdrant collection (local mode, fastembed embeddings) and recalls them before searching the web, building expertise across runs.
 - **Short selling with guardrails.** Traders can open short positions. Hard risk limits are enforced in code on every trade — max 30% of portfolio value in a single position, max 50% total short exposure — while a RiskManager agent reviews proposed trades and advises before execution.
+- **Cost per round.** The same tracer reads the token counts off each generation span and prices them from OpenRouter's public model list, so the dashboard shows what every trader spends alongside what it earns. The four models differ by more than tenfold per token, which makes cost per decision as interesting a comparison as return.
 - **Observability.** A custom `TracingProcessor` writes every agent step (tool calls, generations, handoffs) to the database; the dashboard renders it as a live color-coded activity log per trader.
 
 ## Running it
@@ -64,17 +65,18 @@ Reset all traders to their starting strategies with `uv run -m backend.reset`.
 uv run pytest
 ```
 
-Covers the account mechanics (including shorts), the risk limits, and the price cache.
+Covers the account mechanics (including shorts), the risk limits, the price cache, the daily scheduler and the cost accounting.
 
 ## Architecture notes
 
-- The backend exposes a small read-only JSON API (`/api/traders`, `/api/traders/{name}`, `/api/traders/{name}/logs`, `/api/market`); the engine writes the SQLite database out of band. The Vite dev server proxies `/api`, so there is no CORS to configure.
+- The backend exposes a small read-only JSON API (`/api/traders`, `/api/traders/{name}`, `/api/traders/{name}/logs`, `/api/market`, `/api/costs`); the engine writes the SQLite database out of band. The Vite dev server proxies `/api`, so there is no CORS to configure.
 - Sub-agents are wrapped as tools (`agent.as_tool(...)`) rather than handoffs: the trader stays in control and gets an answer back.
 - Tool exposure is deliberately narrow, and where a vendor's own MCP server is too broad it is replaced by a thin one of ours. The generic market server let agents explore REST endpoints the free plan rejects; the vendor search server let them request 20 results with raw page content (~30k tokens a call, several calls a turn) until requests exceeded the model's token limit. Ours fix the breadth in code. The RiskManager likewise sees only the read-only account tools. Choosing what an agent can see is context engineering.
 - Prices live in a SQLite cache shared by every process (the engine, each trader's accounts server, the API). A fresh hit skips the API call, a stale price beats a failing API, and a symbol with no price history raises — a trade fails loudly and is retried later rather than filling at a made-up price. There is no simulated fallback by design.
 - Each trader runs on a different provider (OpenAI, Z.ai, Google, DeepSeek) through OpenAI-compatible endpoints. `get_model` routes a name containing a "/" to OpenRouter and a bare name to that provider directly, so a trader can be moved between the two by renaming it. Most go through OpenRouter, because a free tier throttling one provider leaves that trader idle and makes its results incomparable. Set `USE_MANY_MODELS=false` to run everyone on one cheap model.
 - The Researcher and RiskManager run on one cheap model shared by all four traders (`SUB_AGENT_MODEL`). They account for most of the token volume — the researcher's context grows with every search result — so paying a frontier rate there dominated the bill, and sharing one model means the traders differ in their decisions rather than in the research handed to them.
-- The database keeps itself small: trace logs and cached searches expire on a retention window applied at engine start, while accounts, strategy revisions and the agents' vector memory — the record of the experiment — are never pruned. The log is indexed on `(name, datetime)` because the dashboard polls it for every trader every few seconds.
+- Model prices come from OpenRouter's public catalogue, which needs no key and lists the OpenAI models too — convenient, since three traders route through OpenRouter and the fourth runs an OpenAI model by its bare name. They are cached in the database and refreshed once a day, and a model the catalogue does not carry records its tokens with a null cost rather than a guessed zero, so an incomplete total is visible as one.
+- The database keeps itself small: trace logs and cached searches expire on a retention window applied at engine start, while accounts, strategy revisions, token usage and the agents' vector memory — the record of the experiment — are never pruned. The log is indexed on `(name, datetime)` because the dashboard polls it for every trader every few seconds.
 - Everything bought from an external API is cached in the database and capped in code: prices by TTL, and searches both by TTL and by a per-run budget. Four traders in a round ask near-identical questions, and each search costs a credit.
 
 ## Credits
