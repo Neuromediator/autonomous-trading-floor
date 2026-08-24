@@ -24,6 +24,8 @@ def env(monkeypatch):
     monkeypatch.setattr(
         accounts_module, "write_account", lambda name, fields: store.__setitem__(name.lower(), fields)
     )
+    # The fixture trades as "testy", which is not one of the four real traders.
+    monkeypatch.setattr(accounts_module, "KNOWN_TRADERS", accounts_module.KNOWN_TRADERS | {"testy"})
     monkeypatch.setattr(accounts_module, "write_log", log)
     monkeypatch.setattr(risk_module, "write_log", log)
     return {"prices": prices, "store": store, "logs": logs}

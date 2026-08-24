@@ -5,11 +5,18 @@ from datetime import datetime
 from .market import get_share_price
 from .database import write_account, read_account, write_log, write_strategy
 from .risk import check_trade
+from .roster import names as trader_names
 
 load_dotenv(override=True)
 
 INITIAL_BALANCE = 10_000.0
 SPREAD = 0.002
+
+# Only the four traders hold accounts. Account.get used to create one for any
+# string it was given, so when a model put a ticker in the name slot it minted
+# a fresh account with a full starting balance and traded from it — no error,
+# no log line, and the real trader's order lost.
+KNOWN_TRADERS = {name.lower() for name in trader_names}
 
 
 class Transaction(BaseModel):
@@ -36,10 +43,19 @@ class Account(BaseModel):
 
     @classmethod
     def get(cls, name: str):
-        fields = read_account(name.lower())
+        key = name.lower()
+        if key not in KNOWN_TRADERS:
+            # Spelled out for the model that made the mistake, so the next call
+            # is right rather than another guess.
+            raise ValueError(
+                f"There is no trader called {name!r}. Valid names are "
+                f"{', '.join(sorted(KNOWN_TRADERS))}. The trader's name goes in "
+                "'name' and the ticker goes in 'symbol'."
+            )
+        fields = read_account(key)
         if not fields:
             fields = {
-                "name": name.lower(),
+                "name": key,
                 "balance": INITIAL_BALANCE,
                 "strategy": "",
                 "holdings": {},

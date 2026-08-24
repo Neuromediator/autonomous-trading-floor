@@ -8,6 +8,7 @@ from .database import prune_old_rows
 from .tracers import LogTracer
 from agents import add_trace_processor, set_trace_processors
 from .market import is_market_open
+from .roster import names, lastnames
 from dotenv import load_dotenv
 import os
 
@@ -34,8 +35,6 @@ USE_MANY_MODELS = os.getenv("USE_MANY_MODELS", "true").strip().lower() == "true"
 # them local; the dashboard's activity log comes from LogTracer either way.
 OPENAI_TRACING = os.getenv("OPENAI_TRACING", "true").strip().lower() == "true"
 
-names = ["Warren", "George", "Ray", "Cathie"]
-lastnames = ["Patience", "Bold", "Systematic", "Crypto"]
 
 if USE_MANY_MODELS:
     # One model per trader, all from four different labs and all in the same

@@ -73,3 +73,21 @@ def test_trades_are_labelled_by_what_they_do_to_the_position(env):
     account.buy_shares("MSFT", 3, "cover")
 
     assert [t["action"] for t in classify_trades(account)] == ["BUY", "SELL", "SHORT", "COVER"]
+
+
+def test_unknown_name_is_rejected_instead_of_creating_an_account(env):
+    """A model that puts a ticker in the name slot must not mint an account.
+
+    It happened in production: buy_shares(name="ADBE", ...) created an account
+    called "adbe" with a full starting balance, bought from it, and said
+    nothing. The real trader's order was lost.
+    """
+    with pytest.raises(ValueError) as excinfo:
+        Account.get("ADBE")
+    assert "ADBE" in str(excinfo.value)
+    assert env["store"] == {}
+
+
+def test_known_traders_are_accepted(env):
+    for name in ("Warren", "george", "RAY", "Cathie"):
+        assert Account.get(name).name == name.lower()
