@@ -35,6 +35,25 @@ export interface TimePoint {
 }
 
 // Mirrors the full backend payload; the dashboard renders a subset of these fields.
+export interface RoundCost {
+  day: string;
+  cost: number;
+  input_tokens: number;
+  output_tokens: number;
+  calls: number;
+}
+
+export interface Cost {
+  total: number;
+  input_tokens: number;
+  output_tokens: number;
+  calls: number;
+  /** Calls whose model had no published price; their cost is missing from the totals. */
+  unpriced_calls: number;
+  per_round: RoundCost[];
+  last_round: number;
+}
+
 export interface TraderDetail extends TraderInfo {
   balance: number;
   /** The trader's fixed mandate, set in code and not rewritable by the agent. */
@@ -49,6 +68,7 @@ export interface TraderDetail extends TraderInfo {
   /** Short market value as a share of the portfolio, and the hard limit on it. */
   short_exposure: number;
   max_short_exposure: number;
+  cost: Cost;
   time_series: TimePoint[];
 }
 

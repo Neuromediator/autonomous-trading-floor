@@ -17,7 +17,13 @@ from fastapi.staticfiles import StaticFiles
 
 from backend import market
 from backend.accounts import Account
-from backend.database import read_log, read_strategies
+from backend.database import (
+    read_log,
+    read_strategies,
+    read_unpriced_calls,
+    read_usage_by_day,
+    read_usage_total,
+)
 from backend.risk import MAX_SHORT_EXPOSURE
 from backend.templates import persona
 from backend.trading_floor import names, lastnames, short_model_names
@@ -100,6 +106,50 @@ def holdings_detail(account: Account) -> list[dict]:
     return details
 
 
+def cost_summary(name: str) -> dict:
+    """What this trader has spent on models, in total and per round.
+
+    One round a day, so a day is a round. unpriced counts calls whose model had
+    no published price — their tokens are in the totals but their cost is not,
+    and saying so beats quietly reporting a number that is too low.
+    """
+    cost, input_tokens, output_tokens, calls = read_usage_total(name)
+    rounds = [
+        {
+            "day": day,
+            "cost": day_cost,
+            "input_tokens": day_input,
+            "output_tokens": day_output,
+            "calls": day_calls,
+        }
+        for day, day_cost, day_input, day_output, day_calls in read_usage_by_day(name)
+    ]
+    return {
+        "total": cost,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "calls": calls,
+        "unpriced_calls": read_unpriced_calls(name),
+        "per_round": rounds,
+        "last_round": rounds[-1]["cost"] if rounds else 0.0,
+    }
+
+
+@app.get("/api/costs")
+def get_costs() -> dict:
+    """What every trader has spent, and what the floor spent per round."""
+    per_trader = {trader["name"]: cost_summary(trader["name"]) for trader in roster}
+    by_day: dict[str, float] = {}
+    for summary in per_trader.values():
+        for entry in summary["per_round"]:
+            by_day[entry["day"]] = by_day.get(entry["day"], 0.0) + entry["cost"]
+    return {
+        "traders": per_trader,
+        "floor_total": sum(s["total"] for s in per_trader.values()),
+        "per_round": [{"day": day, "cost": by_day[day]} for day in sorted(by_day)],
+    }
+
+
 def require_trader(name: str) -> dict:
     trader = roster_by_name.get(name.lower())
     if not trader:
@@ -145,6 +195,7 @@ def get_trader(name: str) -> dict:
         "transactions": classify_trades(account),
         "short_exposure": short_exposure(account, holdings, portfolio_value),
         "max_short_exposure": MAX_SHORT_EXPOSURE,
+        "cost": cost_summary(name),
         "time_series": [{"datetime": ts, "value": value} for ts, value in account.portfolio_value_time_series],
     }
 

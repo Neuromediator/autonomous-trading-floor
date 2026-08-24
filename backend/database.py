@@ -72,9 +72,34 @@ with connect() as conn:
             strategy TEXT
         )
     ''')
+    # What each round cost. Tokens come from the agent SDK's generation spans,
+    # cost is tokens x price; a model we have no price for stores NULL rather
+    # than a guessed zero, so the dashboard can say "unpriced" instead of
+    # under-reporting. Never pruned: this is the record of the experiment.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            datetime DATETIME,
+            model TEXT,
+            input_tokens INTEGER,
+            output_tokens INTEGER,
+            cost REAL
+        )
+    ''')
+    # Prices per token, cached from OpenRouter's public model list.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS model_prices (
+            model TEXT PRIMARY KEY,
+            prompt REAL,
+            completion REAL,
+            fetched_at REAL
+        )
+    ''')
     # The dashboard polls the log for every trader every few seconds; without
     # this the query is a full table scan plus a sort, which grows with history.
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_logs_name_datetime ON logs (name, datetime)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_usage_name_datetime ON usage (name, datetime)')
     conn.commit()
 
 def write_account(name, account_dict):
@@ -179,6 +204,84 @@ def prune_old_rows() -> tuple[int, int]:
             searches = cursor.rowcount
         conn.commit()
         return logs, searches
+
+
+def write_usage(name: str, model: str, input_tokens: int, output_tokens: int, cost: float | None):
+    """Record one model call: who it was for, what it used, what it cost."""
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO usage (name, datetime, model, input_tokens, output_tokens, cost)
+            VALUES (?, datetime('now'), ?, ?, ?, ?)
+            """,
+            (name.lower(), model, input_tokens, output_tokens, cost),
+        )
+        conn.commit()
+
+
+def read_usage_total(name: str) -> tuple[float, int, int, int]:
+    """(cost, input tokens, output tokens, calls) for a trader, all time."""
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT COALESCE(SUM(cost), 0), COALESCE(SUM(input_tokens), 0),
+                   COALESCE(SUM(output_tokens), 0), COUNT(*)
+            FROM usage WHERE name = ?
+            """,
+            (name.lower(),),
+        ).fetchone()
+        return row
+
+
+def read_usage_by_day(name: str) -> list[tuple[str, float, int, int, int]]:
+    """Per-day (day, cost, input, output, calls), oldest first.
+
+    One round a day, so a day is a round.
+    """
+    with connect() as conn:
+        return conn.execute(
+            """
+            SELECT date(datetime) AS day, COALESCE(SUM(cost), 0),
+                   COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0),
+                   COUNT(*)
+            FROM usage WHERE name = ?
+            GROUP BY day ORDER BY day
+            """,
+            (name.lower(),),
+        ).fetchall()
+
+
+def read_unpriced_calls(name: str) -> int:
+    """Calls whose model had no published price, so cost is unknown."""
+    with connect() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM usage WHERE name = ? AND cost IS NULL", (name.lower(),)
+        ).fetchone()[0]
+
+
+def write_model_prices(rows: list[tuple[str, float, float]]):
+    """Cache per-token prices: (model, prompt, completion)."""
+    with connect() as conn:
+        conn.executemany(
+            """
+            INSERT INTO model_prices (model, prompt, completion, fetched_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(model) DO UPDATE SET
+                prompt=excluded.prompt, completion=excluded.completion,
+                fetched_at=excluded.fetched_at
+            """,
+            [(m, p, c, time.time()) for m, p, c in rows],
+        )
+        conn.commit()
+
+
+def read_model_prices() -> dict[str, tuple[float, float, float]]:
+    """{model: (prompt, completion, fetched_at)} for every cached model."""
+    with connect() as conn:
+        return {
+            row[0]: (row[1], row[2], row[3])
+            for row in conn.execute("SELECT model, prompt, completion, fetched_at FROM model_prices")
+        }
 
 
 def write_log(name: str, type: str, message: str):

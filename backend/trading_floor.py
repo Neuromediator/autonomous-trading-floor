@@ -9,6 +9,7 @@ from .tracers import LogTracer
 from agents import add_trace_processor, set_trace_processors
 from .market import is_market_open
 from .roster import names, lastnames
+from .pricing import prices_are_stale, refresh_prices
 from dotenv import load_dotenv
 import os
 
@@ -129,6 +130,12 @@ async def run_forever():
     logs, searches = prune_old_rows()
     if logs or searches:
         print(f"Pruned {logs} expired log rows and {searches} cached searches")
+    # Prices change; a stale list would quietly misreport what a round cost.
+    if prices_are_stale():
+        try:
+            print(f"Cached prices for {refresh_prices()} models")
+        except Exception as error:
+            print(f"Could not refresh model prices ({error}); costs may be missing")
     traders = create_traders()
 
     if RUN_AT:

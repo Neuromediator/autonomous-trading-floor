@@ -655,3 +655,42 @@ body {
     height: 150px;
   }
 }
+
+/* What the models cost. The headline number is the last round, because that is
+   the figure that repeats every day; the all-time total sits underneath. */
+.costs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.costs-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--fg-dim);
+}
+.costs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.costs-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+.costs-name { color: var(--fg); }
+.costs-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+.costs-total {
+  font-size: 11px;
+  color: var(--fg-dim);
+}

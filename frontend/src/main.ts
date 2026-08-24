@@ -67,6 +67,49 @@ async function pollData(): Promise<void> {
   markLeader();
   renderReturns();
   renderShorts();
+  renderCosts();
+}
+
+/** Small sums, so cents would round to nothing; four decimals keep a round legible. */
+function money(value: number): string {
+  return value >= 1 ? `$${value.toFixed(2)}` : `$${value.toFixed(4)}`;
+}
+
+function renderCosts(): void {
+  const block = document.getElementById("costs")!;
+  const list = document.getElementById("costs-list")!;
+  const rows = [...states.values()]
+    .map((s) => s.detail)
+    .filter((d): d is NonNullable<typeof d> => d !== null && d.cost !== undefined)
+    .filter((d) => d.cost.calls > 0)
+    .sort((a, b) => b.cost.last_round - a.cost.last_round);
+
+  // Before the first round there is nothing to show; the block stays away.
+  block.hidden = rows.length === 0;
+  if (rows.length === 0) return;
+
+  list.innerHTML = "";
+  for (const d of rows) {
+    const li = document.createElement("li");
+    li.className = "costs-row";
+    const name = document.createElement("span");
+    name.className = "costs-name";
+    name.textContent = d.name;
+    const amount = document.createElement("span");
+    amount.className = "costs-amount";
+    amount.textContent = money(d.cost.last_round);
+    const tokens = (d.cost.input_tokens + d.cost.output_tokens).toLocaleString();
+    amount.title = `${d.model_name}: ${tokens} tokens over ${d.cost.calls} calls, ${money(d.cost.total)} all time`;
+    li.append(name, amount);
+    list.append(li);
+  }
+
+  const lastRound = rows.reduce((sum, d) => sum + d.cost.last_round, 0);
+  const allTime = rows.reduce((sum, d) => sum + d.cost.total, 0);
+  const unpriced = rows.reduce((sum, d) => sum + d.cost.unpriced_calls, 0);
+  const note = unpriced > 0 ? ` · ${unpriced} unpriced` : "";
+  document.getElementById("costs-total")!.textContent =
+    `Round ${money(lastRound)} · total ${money(allTime)}${note}`;
 }
 
 function renderShorts(): void {
