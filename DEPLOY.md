@@ -165,6 +165,44 @@ curl -s https://your-subdomain.duckdns.org/api/market
 It should report the price tier and whether the market is open. The dashboard
 itself is at the root of the same host.
 
+## Hardening
+
+No account on the server has a password — it was created with an SSH key — so
+password authentication can only ever fail, and it drew about 2500 bot attempts
+a day into the journal. Turn it off:
+
+```bash
+# as root
+cat > /etc/ssh/sshd_config.d/99-hardening.conf <<'EOF'
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin prohibit-password
+EOF
+sshd -t && systemctl reload ssh
+```
+
+Check that a *new* key login still works before closing the session you have.
+
+A cloud firewall then stops the scanners at the network instead of at sshd.
+Define inbound rules only: with no outbound rules the server keeps unrestricted
+egress, which it needs for the LLM, market data and search APIs.
+
+```bash
+# on your own machine
+cat <<'EOF' | hcloud firewall create --name trading-floor --rules-file -
+[
+  {"direction":"in","protocol":"tcp","port":"22","source_ips":["0.0.0.0/0","::/0"],"description":"SSH"},
+  {"direction":"in","protocol":"tcp","port":"80","source_ips":["0.0.0.0/0","::/0"],"description":"HTTP"},
+  {"direction":"in","protocol":"tcp","port":"443","source_ips":["0.0.0.0/0","::/0"],"description":"HTTPS"},
+  {"direction":"in","protocol":"icmp","source_ips":["0.0.0.0/0","::/0"],"description":"ping and path MTU"}
+]
+EOF
+hcloud firewall apply-to-resource --type server --server trading-floor trading-floor
+```
+
+Create it with its rules and apply it afterwards: an empty firewall denies all
+inbound traffic and would lock you out. Cloud firewalls are free.
+
 ## Backups
 
 The database is the experiment's only record and nothing recreates it, so the
