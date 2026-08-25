@@ -32,9 +32,11 @@ MAX_RESULTS = 4
 # Roughly 375 tokens per result, so a full search costs about 1.5k tokens.
 MAX_CONTENT_CHARS = 1500
 TIMEOUT_SECONDS = 30
-# Four traders a day at this budget stay inside the 1000 credits a month the
-# free plan allows, before the cache saves any of them.
-MAX_SEARCHES_PER_RUN = int(os.getenv("MAX_SEARCHES_PER_RUN", "10"))
+# Tavily bills one credit per live search. Four traders at this budget, on the
+# ~22 days a month the market opens, come to about 1000 credits before the cache
+# saves any of them, which is what the free plan allows. Raising it, or running
+# on closed days too, needs a paid plan.
+MAX_SEARCHES_PER_RUN = int(os.getenv("MAX_SEARCHES_PER_RUN", "12"))
 # Long enough to collapse one round's duplicates, short enough that a trader
 # never acts on yesterday's news.
 SEARCH_CACHE_TTL_SECONDS = int(os.getenv("SEARCH_CACHE_TTL_SECONDS", str(6 * 3600)))
