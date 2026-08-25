@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 from dotenv import load_dotenv
 from agents.mcp import MCPServerStdio, create_static_tool_filter
@@ -8,6 +9,7 @@ load_dotenv(override=True)
 
 PROJECT_DIR = str(Path(__file__).resolve().parent.parent)
 TIMEOUT = 120
+FETCH_COMMAND = "mcp-server-fetch"
 
 
 def server(name: str, params: dict, **kwargs) -> MCPServerStdio:
@@ -71,7 +73,19 @@ def researcher_mcp_servers(name: str) -> list[MCPServerStdio]:
     Memory is a per-trader Qdrant collection run in local mode (no server needed);
     fastembed downloads its embedding model on first use.
     """
-    fetch = server("fetch", {"command": "uvx", "args": ["--with", "mcp<2", "mcp-server-fetch"]})
+    # Installed, not run through uvx. uvx re-resolves the dependency tree on
+    # every launch, so any release anywhere in it makes uv build a fresh
+    # environment — and a fresh readabilipy has no node_modules, runs
+    # "npm install" on first use, and writes npm's output to stdout, which for a
+    # stdio MCP server is the JSON-RPC channel itself. It happened mid-round on
+    # 25 Aug 2026. "uv tool install" pins one environment uv will not rebuild,
+    # so that install happens once, at setup time, where its output is harmless.
+    if shutil.which(FETCH_COMMAND) is None:
+        raise RuntimeError(
+            f"{FETCH_COMMAND} is not installed. Run: "
+            f"uv tool install --with 'mcp<2' mcp-server-fetch"
+        )
+    fetch = server("fetch", {"command": FETCH_COMMAND, "args": []})
     search = server(
         "search",
         {"command": "uv", "args": ["run", "-m", "backend.research_server"], "cwd": PROJECT_DIR},

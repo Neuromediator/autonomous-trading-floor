@@ -38,6 +38,12 @@ Requires Python 3.12+ with [uv](https://docs.astral.sh/uv/), and Node for the fr
 ```bash
 uv sync
 cd frontend && npm install && cd ..
+
+# The researcher's fetch server, in its own pinned environment. Not uvx: uvx
+# rebuilds it whenever a dependency publishes, and a rebuilt readabilipy runs
+# "npm install" on first use, straight into the MCP server's JSON-RPC channel.
+uv tool install --with "mcp<2" mcp-server-fetch
+(cd ~/.local/share/uv/tools/mcp-server-fetch/lib/python3.*/site-packages/readabilipy/javascript && npm install)
 ```
 
 Three processes:
