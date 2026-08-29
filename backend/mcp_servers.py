@@ -9,7 +9,29 @@ load_dotenv(override=True)
 
 PROJECT_DIR = str(Path(__file__).resolve().parent.parent)
 TIMEOUT = 120
-FETCH_COMMAND = "mcp-server-fetch"
+# The third-party MCP servers, and the command that installs each one.
+THIRD_PARTY_SERVERS = {
+    "mcp-server-fetch": "uv tool install --with 'mcp<2' mcp-server-fetch",
+    "mcp-server-qdrant": "uv tool install mcp-server-qdrant",
+}
+
+
+def installed(command: str) -> str:
+    """The command for a third-party server, checked before a round leans on it.
+
+    These are installed, not run through uvx. uvx re-resolves the dependency
+    tree on every launch, so any release anywhere in it makes uv build a fresh
+    environment mid-round — and a fresh readabilipy has no node_modules, runs
+    "npm install" on first use, and writes npm's output to stdout, which for a
+    stdio MCP server is the JSON-RPC channel itself. It happened on 25 Aug 2026.
+    "uv tool install" pins one environment uv will not rebuild, so an install
+    like that happens once, at setup time, where its output is harmless.
+    A missing command is a setup mistake, so say so here rather than let the
+    trader hit an opaque failure in the middle of a round.
+    """
+    if shutil.which(command) is None:
+        raise RuntimeError(f"{command} is not installed. Run: {THIRD_PARTY_SERVERS[command]}")
+    return command
 
 
 def server(name: str, params: dict, **kwargs) -> MCPServerStdio:
@@ -73,19 +95,7 @@ def researcher_mcp_servers(name: str) -> list[MCPServerStdio]:
     Memory is a per-trader Qdrant collection run in local mode (no server needed);
     fastembed downloads its embedding model on first use.
     """
-    # Installed, not run through uvx. uvx re-resolves the dependency tree on
-    # every launch, so any release anywhere in it makes uv build a fresh
-    # environment — and a fresh readabilipy has no node_modules, runs
-    # "npm install" on first use, and writes npm's output to stdout, which for a
-    # stdio MCP server is the JSON-RPC channel itself. It happened mid-round on
-    # 25 Aug 2026. "uv tool install" pins one environment uv will not rebuild,
-    # so that install happens once, at setup time, where its output is harmless.
-    if shutil.which(FETCH_COMMAND) is None:
-        raise RuntimeError(
-            f"{FETCH_COMMAND} is not installed. Run: "
-            f"uv tool install --with 'mcp<2' mcp-server-fetch"
-        )
-    fetch = server("fetch", {"command": FETCH_COMMAND, "args": []})
+    fetch = server("fetch", {"command": installed("mcp-server-fetch"), "args": []})
     search = server(
         "search",
         {"command": "uv", "args": ["run", "-m", "backend.research_server"], "cwd": PROJECT_DIR},
@@ -93,8 +103,8 @@ def researcher_mcp_servers(name: str) -> list[MCPServerStdio]:
     memory = server(
         f"memory ({name.lower()})",
         {
-            "command": "uvx",
-            "args": ["mcp-server-qdrant"],
+            "command": installed("mcp-server-qdrant"),
+            "args": [],
             "env": {
                 "QDRANT_LOCAL_PATH": f"{PROJECT_DIR}/memory/qdrant_{name.lower()}",
                 "COLLECTION_NAME": f"{name.lower()}-memories",

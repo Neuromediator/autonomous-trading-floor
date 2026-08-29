@@ -76,13 +76,15 @@ cd /opt/trading-floor
 uv sync
 cd frontend && npm ci && npm run build && cd ..
 
-# Install the researcher's fetch server into its own pinned environment, and
-# install readabilipy's JavaScript reader once. readabilipy runs "npm install"
-# the first time it is used and writes npm's output to stdout, which for an MCP
-# stdio server is the JSON-RPC channel itself. uvx would not do: it re-resolves
-# on every launch and rebuilds the environment whenever a dependency publishes,
-# which puts that npm output back in the middle of a live round.
+# Install the researcher's fetch and memory servers, each into its own pinned
+# environment, and install readabilipy's JavaScript reader once. readabilipy
+# runs "npm install" the first time it is used and writes npm's output to
+# stdout, which for an MCP stdio server is the JSON-RPC channel itself. uvx
+# would not do: it re-resolves on every launch and rebuilds the environment
+# whenever a dependency publishes, which puts that install back in the middle
+# of a live round.
 uv tool install --with "mcp<2" mcp-server-fetch
+uv tool install mcp-server-qdrant
 (cd ~/.local/share/uv/tools/mcp-server-fetch/lib/python3.*/site-packages/readabilipy/javascript && npm install)
 ```
 
@@ -244,7 +246,8 @@ cd frontend && npm ci && npm run build && cd ..
 systemctl restart trading-api trading-engine
 ```
 
-`mcp-server-fetch` is deliberately not upgraded here. It lives in its own pinned
-environment so that nothing rebuilds it mid-round; upgrade it on purpose with
-`uv tool upgrade mcp-server-fetch`, and re-run the `npm install` from step 4
-afterwards, since an upgrade replaces the directory that holds `node_modules`.
+`mcp-server-fetch` and `mcp-server-qdrant` are deliberately not upgraded here.
+Each lives in its own pinned environment so that nothing rebuilds it mid-round;
+upgrade one on purpose with `uv tool upgrade <name>`. After upgrading
+`mcp-server-fetch`, re-run the `npm install` from step 4, since an upgrade
+replaces the directory that holds `node_modules`.
