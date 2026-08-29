@@ -87,6 +87,13 @@ Covers the account mechanics (including shorts), the risk limits, the price cach
 - The database keeps itself small: trace logs and cached searches expire on a retention window applied at engine start, while accounts, strategy revisions, token usage and the agents' vector memory — the record of the experiment — are never pruned. The log is indexed on `(name, datetime)` because the dashboard polls it for every trader every few seconds.
 - Everything bought from an external API is cached in the database and capped in code: prices by TTL, and searches both by TTL and by a per-run budget. Four traders in a round ask near-identical questions, and each search costs a credit.
 
+## Free-tier limits
+
+Everything outside the models runs on a free tier, and two of those limits shaped the design more than anything else:
+
+- **Tavily** gives 1000 search credits a month, and one basic search costs one. Four traders asking near-identical questions burn that in weeks, so searches are capped at `MAX_SEARCHES_PER_RUN` per researcher and cached for six hours. A round costs about 40 credits, or roughly 900 over a trading month.
+- **Massive's** free plan serves previous-close prices only and allows 5 requests a minute. Hence the shared price cache, our own narrow market server instead of the vendor's generic one, and a trade that fails loudly rather than filling at a made-up price.
+
 ## Credits
 
 The core simulation grew out of the capstone project of [Ed Donner's Agentic AI course](https://edwarddonner.com/curriculum), which I completed and then extended: short selling, deterministic risk limits plus a RiskManager agent, Qdrant semantic memory in place of the knowledge graph, a price cache for the market data free tier, and a test suite.
